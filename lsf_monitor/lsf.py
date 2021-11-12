@@ -1,0 +1,76 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# Copyright 2019-2021 EMBL - European Bioinformatics Institute
+#
+# Licensed under the Apache License, Version 2.0 (the 'License');
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an 'AS IS' BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import json
+import logging
+import sys
+from subprocess import check_output
+from typing import List, Optional
+
+logging.basicConfig()
+
+
+def _parse_bjobs(bjobs_output_str):
+    """
+    Parse records from bjobs json type output.
+    This snippet was taken from: https://github.com/DataBiosphere/toil/blob/eb2ae8365ae2ebdd50132570b20f7d480eb40cac/src/toil/batchSystems/lsf.py#L331
+    params:
+        bjobs_output_str: stdout of bjobs json type output
+    """
+    bjobs_dict = None
+    bjobs_records = None
+    # Handle Cannot connect to LSF. Please wait ... type messages
+    dict_start = bjobs_output_str.find("{")
+    dict_end = bjobs_output_str.rfind("}")
+    if dict_start != -1 and dict_end != -1:
+        bjobs_output = bjobs_output_str[dict_start : (dict_end + 1)]
+        try:
+            bjobs_dict = json.loads(bjobs_output)
+        except json.decoder.JSONDecodeError as e:
+            logging.exception(e)
+            logging.error(f"Could not parse bjobs output: {bjobs_output_str}")
+            sys.exit(1)
+        return bjobs_dict["RECORDS"]
+    if bjobs_records is None:
+        logging.error(f"Could not find bjobs output json in: {bjobs_output_str}")
+
+
+def get_jobs(lsf_args: Optional[List[str]] = None):
+    """bjobs command, it uses the json output and includes [stat, name and jobid].
+    Any other parameters in lsf_args will be included in the call to bjobs.
+    """
+    fields = [
+        "stat",
+        "name",
+        "jobid",
+        "job_group",
+        "user",
+        "queue",
+        "start_time",
+        "finish_time",
+        "exec_host",
+        "command",
+        "exit_reason",
+        "exit_code",
+        "error_file",
+        "output_file",
+    ]
+    args = ["bjobs", "-json", "-o", " ".join(fields)]
+    if lsf_args:
+        args.extend(list(map(str, lsf_args)))
+    bjobs_output = check_output(args, universal_newlines=True)
+    jobs = _parse_bjobs(bjobs_output)
+    return jobs
