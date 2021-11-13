@@ -14,9 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import sys
 import argparse
-
-from typing import Optional
 
 from rich.console import Console
 from rich.table import Table
@@ -24,40 +23,111 @@ from rich.text import Text
 
 import getpass
 
-import lsf
+from lsf_monitor import lsf
 
 
-def _status_style(job) -> Text:
-    if job["STAT"] == "RUN":
-        return Text(job["STAT"], style="bold green")
-    elif job["STAT"] == "PEND":
-        return Text(job["STAT"], style="white")
-    return Text(job["STAT"], style="grey93")
+def _status_style(job_entry) -> Text:
+    if job_entry["STAT"] == "RUN":
+        return Text(job_entry["STAT"], style="bold green")
+    elif job_entry["STAT"] == "PEND":
+        return Text(job_entry["STAT"], style="dark_orange")
+    elif job_entry["STAT"] == "DONE":
+        return Text(job_entry["STAT"], style="honeydew2")
+    return Text(job_entry["STAT"], style="grey93")
 
 
-def main(
-    user: str = "", queue: str = "", status_filters: Optional[list[str]] = None
-) -> None:
-    """Call bjobs and build the table with the results
-    :param user: "bjobs -u" displays jobs in the specified user
-    :param queue: "bjobs -q" displays jobs in the specified queue
-    :param status_filters: job status filters such as -r for RUN or -p for PEND
-    """
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="bjobs but a bit nicer")
+    parser.add_argument(
+        dest="job_id",
+        help="Specifies the jobs or job arrays that bjobs displays.",
+        nargs="*",
+    )
+    parser.add_argument(
+        "-q", dest="queue", required=False, help="Displays jobs in the specified queue"
+    )
+    parser.add_argument(
+        "-u", dest="user", required=False, help="Displays jobs in the specified user"
+    )
+    parser.add_argument(
+        "-r", dest="run", action="store_true", help="Displays running jobs."
+    )
+    parser.add_argument(
+        "-a",
+        dest="all",
+        action="store_true",
+        help="Displays information about jobs in all states, including jobs that finished recently.",
+    )
+    parser.add_argument(
+        "-d",
+        dest="recent",
+        action="store_true",
+        help="Displays information about jobs that finished recently.",
+    )
+    parser.add_argument(
+        "-G",
+        dest="user_group",
+        required=False,
+        help="Displays jobs associated with the specified user group.",
+    )
+    parser.add_argument(
+        "-g",
+        dest="group",
+        required=False,
+        help="Displays information about jobs attached to the specified job group.",
+    )
+    parser.add_argument(
+        "-m",
+        dest="hosts",
+        required=False,
+        help="Displays jobs dispatched to the specified hosts.",
+    )
+    parser.add_argument(
+        "-p",
+        dest="pend",
+        action="store_true",
+        help="Displays pending jobs, together with the pending reasons that caused each job not to be dispatched during the last dispatch turn.",
+    )
+
+    args = parser.parse_args()
+
     console = Console()
 
     jobs = []
     with console.status("Getting the jobs from LSF...", spinner="monkey"):
         lsf_args = []
-        if user:
-            lsf_args.extend(["-u", user])
-        if queue:
-            lsf_args.extend(["-q", queue])
-        if status_filters:
-            lsf_args.extend(status_filters)
+        if args.user:
+            lsf_args.extend(["-u", args.user])
+        if args.queue:
+            lsf_args.extend(["-q", args.queue])
+        if args.run:
+            lsf_args.extend(["-r"])
+        if args.all:
+            lsf_args.extend(["-a"])
+        if args.recent:
+            lsf_args.extend(["-d"])
+        if args.user_group:
+            lsf_args.extend(["-G", args.user_group])
+        if args.group:
+            lsf_args.extend(["-g", args.group])
+        if args.hosts:
+            lsf_args.extend(["-m", args.hosts])
+        if args.pend:
+            lsf_args.extend(["-p"])
 
-        jobs = lsf.get_jobs()
+        jobs = lsf.get_jobs(args.job_id, lsf_args)
 
-    table = Table(title=f"LSF jobs for {getpass.getuser()}", show_lines=True)
+    if not jobs:
+        text = Text("No jobs.", style="bold white", justify="left")
+        sys.exit(0)
+
+    title = f"LSF jobs for {args.user or getpass.getuser()}"
+    if args.queue:
+        title += f" on queue {args.queue}"
+    if args.hosts:
+        title += f" running on hosts {args.hosts}"
+
+    table = Table(title=title, show_lines=True)
 
     table.add_column("JobId", justify="right")
     table.add_column("Status")
@@ -69,37 +139,19 @@ def main(
     table.add_column("Finish Time")
     # table.add_column("Error File", overflow="fold")
     # table.add_column("Output File", overflow="fold")
-    table.add_column("Pending reason")  # only if there are any pending jobs
+    table.add_column("Pending reason")
 
     for job in sorted(jobs, key=lambda j: j["JOBID"]):
         table.add_row(
             job["JOBID"],
             _status_style(job),
             job["JOB_NAME"],
-            job["JOB_GROUP"],
+            job["JOB_GROUP"] or Text("----", justify="center"),
             job["USER"],
             job["QUEUE"],
             job["START_TIME"],
             job["FINISH_TIME"],
-            job["ERROR_FILE"],
-            job["OUTPUT_FILE"],
-            job["PENDING_REASON"],
+            job["PEND_REASON"] or Text("----", justify="center"),
         )
 
     console.print(table)
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Generate the input.yaml for the CWL pipeline"
-    )
-    parser.add_argument(
-        "-q", dest="queue", required=False, help="Displays jobs in the specified queue"
-    )
-    parser.add_argument(
-        "-u", dest="user", required=False, help="Displays jobs in the specified user"
-    )
-    args = parser.parse_args()
-
-    # TODO: add filters by status
-    main(user=args.user, queue=args.queue)

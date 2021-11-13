@@ -20,8 +20,6 @@ import sys
 from subprocess import check_output
 from typing import List, Optional
 
-logging.basicConfig()
-
 
 def _parse_bjobs(bjobs_output_str):
     """
@@ -48,7 +46,7 @@ def _parse_bjobs(bjobs_output_str):
         logging.error(f"Could not find bjobs output json in: {bjobs_output_str}")
 
 
-def get_jobs(lsf_args: Optional[List[str]] = None):
+def get_jobs(job_ids: Optional[list[int]] = None, lsf_args: Optional[List[str]] = None):
     """bjobs command, it uses the json output and includes [stat, name and jobid].
     Any other parameters in lsf_args will be included in the call to bjobs.
     """
@@ -67,10 +65,13 @@ def get_jobs(lsf_args: Optional[List[str]] = None):
         "exit_code",
         "error_file",
         "output_file",
+        "pend_reason",
     ]
     args = ["bjobs", "-json", "-o", " ".join(fields)]
     if lsf_args:
         args.extend(list(map(str, lsf_args)))
+    if job_ids:
+        args.extend(list(map(str, job_ids)))
     bjobs_output = check_output(args, universal_newlines=True)
     jobs = _parse_bjobs(bjobs_output)
     return jobs
