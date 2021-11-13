@@ -16,6 +16,7 @@
 
 import sys
 import argparse
+import re
 
 from rich.console import Console
 from rich.table import Table
@@ -23,7 +24,7 @@ from rich.text import Text
 
 import getpass
 
-from lsf_monitor import lsf
+from mjobs import lsf
 
 
 def _status_style(job_entry) -> Text:
@@ -36,7 +37,7 @@ def _status_style(job_entry) -> Text:
     return Text(job_entry["STAT"], style="grey93")
 
 
-if __name__ == "__main__":
+def _get_args():
     parser = argparse.ArgumentParser(description="bjobs but a bit nicer")
     parser.add_argument(
         dest="job_id",
@@ -86,10 +87,23 @@ if __name__ == "__main__":
         "-p",
         dest="pend",
         action="store_true",
-        help="Displays pending jobs, together with the pending reasons that caused each job not to be dispatched during the last dispatch turn.",
+        help=(
+            "Displays pending jobs, together with the pending reasons that caused each job "
+            "not to be dispatched during the last dispatch turn."
+        ),
     )
+    parser.add_argument(
+        "-f",
+        dest="filter",
+        required=False,
+        help="Filter the jobs using the specified regex on the job name or pending reason.",
+    )
+    return parser.parse_args()
 
-    args = parser.parse_args()
+
+if __name__ == "__main__":
+
+    args = _get_args()
 
     console = Console()
 
@@ -115,10 +129,24 @@ if __name__ == "__main__":
         if args.pend:
             lsf_args.extend(["-p"])
 
-        jobs = lsf.get_jobs(args.job_id, lsf_args)
+        try:
+            jobs = lsf.get_jobs(args.job_id, lsf_args)
+        except Exception:
+            console.print_exception()
+
+        if args.filter:
+            filter_regex = re.compile(args.filter)
+            jobs = list(
+                filter(
+                    lambda j: filter_regex.search(j["JOB_NAME"])
+                    or filter_regex.search(j["PEND_REASON"]),
+                    jobs,
+                )
+            )
 
     if not jobs:
         text = Text("No jobs.", style="bold white", justify="left")
+        console.print(text)
         sys.exit(0)
 
     title = f"LSF jobs for {args.user or getpass.getuser()}"
@@ -137,21 +165,31 @@ if __name__ == "__main__":
     table.add_column("Queue")
     table.add_column("Start Time")
     table.add_column("Finish Time")
+    # TODO: add extended table mode (?) as the values of error and output file tend to be long.
     # table.add_column("Error File", overflow="fold")
     # table.add_column("Output File", overflow="fold")
+    table.add_column("Exec. Host")
     table.add_column("Pending reason")
 
     for job in sorted(jobs, key=lambda j: j["JOBID"]):
+
+        job_name = Text(job["JOB_NAME"])
+        pending_reason = Text(job["PEND_REASON"]) or Text("----", justify="center")
+        if args.filter:
+            job_name.highlight_regex(fr"{args.filter}", "bold red")
+            pending_reason.highlight_regex(fr"{args.filter}", "bold red")
+
         table.add_row(
             job["JOBID"],
             _status_style(job),
-            job["JOB_NAME"],
+            job_name,
             job["JOB_GROUP"] or Text("----", justify="center"),
             job["USER"],
             job["QUEUE"],
             job["START_TIME"],
             job["FINISH_TIME"],
-            job["PEND_REASON"] or Text("----", justify="center"),
+            Text(job["EXEC_HOST"], overflow="fold"),
+            pending_reason,
         )
 
     console.print(table)

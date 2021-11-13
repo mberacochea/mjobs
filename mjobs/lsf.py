@@ -15,18 +15,15 @@
 # limitations under the License.
 
 import json
-import logging
-import sys
 from subprocess import check_output
 from typing import List, Optional
 
 
 def _parse_bjobs(bjobs_output_str):
-    """
-    Parse records from bjobs json type output.
+    """Parse records from bjobs json type output.
     This snippet was taken from: https://github.com/DataBiosphere/toil/blob/eb2ae8365ae2ebdd50132570b20f7d480eb40cac/src/toil/batchSystems/lsf.py#L331
-    params:
-        bjobs_output_str: stdout of bjobs json type output
+    :param bjobs_output_str: stdout of bjobs json type output
+    :return: list with the jobs
     """
     bjobs_dict = None
     bjobs_records = None
@@ -35,15 +32,11 @@ def _parse_bjobs(bjobs_output_str):
     dict_end = bjobs_output_str.rfind("}")
     if dict_start != -1 and dict_end != -1:
         bjobs_output = bjobs_output_str[dict_start : (dict_end + 1)]
-        try:
-            bjobs_dict = json.loads(bjobs_output)
-        except json.decoder.JSONDecodeError as e:
-            logging.exception(e)
-            logging.error(f"Could not parse bjobs output: {bjobs_output_str}")
-            sys.exit(1)
+        bjobs_dict = json.loads(bjobs_output)
         return bjobs_dict["RECORDS"]
     if bjobs_records is None:
-        logging.error(f"Could not find bjobs output json in: {bjobs_output_str}")
+        raise ValueError(f"Could not find bjobs output json in: {bjobs_output_str}")
+    return []
 
 
 def get_jobs(job_ids: Optional[list[int]] = None, lsf_args: Optional[List[str]] = None):
