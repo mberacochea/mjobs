@@ -36,4 +36,4 @@ $ ./dist/main --help
 
 # Download
 
-Get the artifact from the 
+Get the artifact from github URL
