@@ -36,4 +36,4 @@ $ ./dist/main --help
 
 # Download
 
-Get the artifact from github URL
+Get the executable from the releases tab.
