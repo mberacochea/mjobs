@@ -20,7 +20,7 @@ jobs:
 
       - name: Create bundle
         run: |
-          pip install requirements-dev.txt
+          pip install -r requirements-dev.txt
           pyinstaller mjobs/main.py --onefile --clean --name mjobs
 
       - name: Publish artifact
