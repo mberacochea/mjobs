@@ -1,0 +1,28 @@
+name: Build mjobs Pyinstaller
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+
+      - name: Build
+        run: |
+          pip install requirements-dev.txt
+          pyinstaller mjobs/main.py --onefile --clean --name mjobs
+
+      - uses: actions/upload-artifact@v2
+      - name: Public
+        with:
+          name: mjobs
+          path: dist/mjobs

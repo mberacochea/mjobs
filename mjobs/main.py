@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Copyright 2019-2021 EMBL - European Bioinformatics Institute
+# Copyright 2019-2021 - Martin Beracochea
 #
 # Licensed under the Apache License, Version 2.0 (the 'License');
 # you may not use this file except in compliance with the License.
@@ -93,6 +93,12 @@ def _get_args():
         ),
     )
     parser.add_argument(
+        "-e",
+        dest="extended",
+        action="store_true",
+        help=("Add the output file and error file to the table."),
+    )
+    parser.add_argument(
         "-f",
         dest="filter",
         required=False,
@@ -159,17 +165,17 @@ if __name__ == "__main__":
 
     table.add_column("JobId", justify="right")
     table.add_column("Status")
-    table.add_column("JobName")
+    table.add_column("JobName", overflow="fold")
     table.add_column("JobGroup")
     table.add_column("User")
     table.add_column("Queue")
     table.add_column("Start Time")
     table.add_column("Finish Time")
-    # TODO: add extended table mode (?) as the values of error and output file tend to be long.
-    # table.add_column("Error File", overflow="fold")
-    # table.add_column("Output File", overflow="fold")
     table.add_column("Exec. Host")
     table.add_column("Pending reason")
+    if args.extended:
+        table.add_column("Error File", overflow="fold")
+        table.add_column("Output File", overflow="fold")
 
     for job in sorted(jobs, key=lambda j: j["JOBID"]):
 
@@ -179,7 +185,7 @@ if __name__ == "__main__":
             job_name.highlight_regex(fr"{args.filter}", "bold red")
             pending_reason.highlight_regex(fr"{args.filter}", "bold red")
 
-        table.add_row(
+        row = [
             job["JOBID"],
             _status_style(job),
             job_name,
@@ -190,6 +196,15 @@ if __name__ == "__main__":
             job["FINISH_TIME"],
             Text(job["EXEC_HOST"], overflow="fold"),
             pending_reason,
-        )
+        ]
+        if args.extended:
+            row.extend(
+                [
+                    job["ERROR_FILE"],
+                    job["OUTPUT_FILE"],
+                ]
+            )
+
+        table.add_row(*row)
 
     console.print(table)
