@@ -19,7 +19,7 @@ jobs:
           pyinstaller mjobs/main.py --onefile --clean --name mjobs
 
       - uses: actions/upload-artifact@v2
-      name: mojbs build
+        name: mojbs build
         with:
           name: mjobs
           path: dist/mjobs
