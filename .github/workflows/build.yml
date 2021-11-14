@@ -14,14 +14,12 @@ jobs:
       - uses: actions/setup-python@v2
         with:
           python-version: '3.9'
-
-      - name: Build
         run: |
           pip install requirements-dev.txt
           pyinstaller mjobs/main.py --onefile --clean --name mjobs
 
       - uses: actions/upload-artifact@v2
-      - name: mojbs build
+      name: mojbs build
         with:
           name: mjobs
           path: dist/mjobs
