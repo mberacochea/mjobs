@@ -17,6 +17,7 @@
 import sys
 import argparse
 import re
+import csv
 
 from rich.console import Console
 from rich.table import Table
@@ -104,6 +105,12 @@ def _get_args():
         required=False,
         help="Filter the jobs using the specified regex on the job name or pending reason.",
     )
+    parser.add_argument(
+        "-t",
+        dest="tsv",
+        action="store_true",
+        help="No fancy table, a good ol' tsv",
+    )
     return parser.parse_args()
 
 
@@ -114,7 +121,7 @@ if __name__ == "__main__":
     console = Console()
 
     jobs = []
-    with console.status("Getting the jobs from LSF...", spinner="monkey"):
+    with console.status("Getting jobs from LSF...", spinner="monkey"):
         lsf_args = []
         if args.user:
             lsf_args.extend(["-u", args.user])
@@ -161,21 +168,23 @@ if __name__ == "__main__":
     if args.hosts:
         title += f" running on hosts {args.hosts}"
 
-    table = Table(title=title, show_lines=True)
-
-    table.add_column("JobId", justify="right")
-    table.add_column("Status")
-    table.add_column("JobName", overflow="fold")
-    table.add_column("JobGroup")
-    table.add_column("User")
-    table.add_column("Queue")
-    table.add_column("Start Time")
-    table.add_column("Finish Time")
-    table.add_column("Exec. Host")
-    table.add_column("Pending reason")
+    cols = [
+        {"header": "JobId", "justify": "right"},
+        {"header": "Status"},
+        {"header": "JobName", "overflow": "fold"},
+        {"header": "JobGroup"},
+        {"header": "User"},
+        {"header": "Queue"},
+        {"header": "Start Time"},
+        {"header": "Finish Time"},
+        {"header": "Exec. Host"},
+        {"header": "Pending reason"},
+    ]
     if args.extended:
-        table.add_column("Error File", overflow="fold")
-        table.add_column("Output File", overflow="fold")
+        cols.append({"header": "Error File", "overflow": "fold"})
+        cols.append({"header": "Output File", "overflow": "fold"})
+
+    rows = []
 
     for job in sorted(jobs, key=lambda j: j["JOBID"]):
 
@@ -205,6 +214,18 @@ if __name__ == "__main__":
                 ]
             )
 
-        table.add_row(*row)
+        rows.append(row)
 
-    console.print(table)
+    if args.tsv:
+        # print with no styles
+        writer = csv.writer(sys.stdout, delimiter="\t")
+        writer.writerow([c.get("header") for c in cols])
+        writer.writerows(rows)
+    else:
+        # print the fancy table
+        table = Table(title=title, show_lines=True)
+        for col in cols:
+            table.add_column(**col)
+        for row in rows:
+            table.add_row(*row)
+        console.print(table)
