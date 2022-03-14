@@ -3,7 +3,7 @@
 A little tool to make it easier to inspect LSF jobs.
 
 ```shell
-usage: mjobs [-h] [-q QUEUE] [-u USER] [-r] [-a] [-d] [-G USER_GROUP] [-g GROUP] [-m HOSTS] [-p] [-e] [-f FILTER] [job_id ...]
+usage: mjobs [-h] [-q QUEUE] [-u USER] [-r] [-a] [-d] [-G USER_GROUP] [-g GROUP] [-m HOSTS] [-p] [-e] [-f FILTER] [-t] [job_id ...]
 
 bjobs but a bit nicer
 
@@ -23,7 +23,12 @@ optional arguments:
   -p             Displays pending jobs, together with the pending reasons that caused each job not to be dispatched during the last dispatch turn.
   -e             Add the output file and error file to the table.
   -f FILTER      Filter the jobs using the specified regex on the job name or pending reason.
+  -t             No fancy table, a good ol' tsv
 ```
+
+## Example
+
+![Alt text](images/mjobs-example.png?raw=true "mjobs example")
 
 # Installation - bundle the app
 

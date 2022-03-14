@@ -50,6 +50,7 @@ def get_jobs(job_ids: Optional[list[int]] = None, lsf_args: Optional[List[str]] 
         "job_group",
         "user",
         "queue",
+        "submit_time",
         "start_time",
         "finish_time",
         "exec_host",

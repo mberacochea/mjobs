@@ -97,7 +97,7 @@ def _get_args():
         "-e",
         dest="extended",
         action="store_true",
-        help=("Add the output file and error file to the table."),
+        help="Add the output file and error file to the table.",
     )
     parser.add_argument(
         "-f",
@@ -175,6 +175,7 @@ if __name__ == "__main__":
         {"header": "JobGroup"},
         {"header": "User"},
         {"header": "Queue"},
+        {"header": "Submit Time"},
         {"header": "Start Time"},
         {"header": "Finish Time"},
         {"header": "Exec. Host"},
@@ -191,8 +192,8 @@ if __name__ == "__main__":
         job_name = Text(job["JOB_NAME"])
         pending_reason = Text(job["PEND_REASON"]) or Text("----", justify="center")
         if args.filter:
-            job_name.highlight_regex(fr"{args.filter}", "bold red")
-            pending_reason.highlight_regex(fr"{args.filter}", "bold red")
+            job_name.highlight_regex(rf"{args.filter}", "bold red")
+            pending_reason.highlight_regex(rf"{args.filter}", "bold red")
 
         row = [
             job["JOBID"],
@@ -201,6 +202,7 @@ if __name__ == "__main__":
             job["JOB_GROUP"] or Text("----", justify="center"),
             job["USER"],
             job["QUEUE"],
+            job["SUBMIT_TIME"],
             job["START_TIME"],
             job["FINISH_TIME"],
             Text(job["EXEC_HOST"], overflow="fold"),
