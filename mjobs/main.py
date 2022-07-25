@@ -97,7 +97,7 @@ def _get_args():
         "-e",
         dest="extended",
         action="store_true",
-        help="Add the output file and error file to the table.",
+        help="Add the execution josts, output file and error file to the table.",
     )
     parser.add_argument(
         "-f",
@@ -178,10 +178,10 @@ if __name__ == "__main__":
         {"header": "Submit Time"},
         {"header": "Start Time"},
         {"header": "Finish Time"},
-        {"header": "Exec. Host"},
         {"header": "Pending reason"},
     ]
     if args.extended:
+        cols.append({"header": "Exec. Host"})
         cols.append({"header": "Error File", "overflow": "fold"})
         cols.append({"header": "Output File", "overflow": "fold"})
 
@@ -205,12 +205,12 @@ if __name__ == "__main__":
             job["SUBMIT_TIME"],
             job["START_TIME"],
             job["FINISH_TIME"],
-            Text(job["EXEC_HOST"], overflow="fold"),
             pending_reason,
         ]
         if args.extended:
             row.extend(
                 [
+                    Text(job["EXEC_HOST"], overflow="fold"),
                     job["ERROR_FILE"],
                     job["OUTPUT_FILE"],
                 ]
