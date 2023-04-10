@@ -117,13 +117,13 @@ def _get_args():
         "-nh",
         dest="no_header",
         action="store_true",
-        help="Don't print the table header, useful to pipe the tsv ouput",
+        help="Don't print the table header, useful to pipe the tsv output",
     )
     parser.add_argument(
         "--bkill",
         dest="bkill",
         action="store_true",
-        help="Run `bkill` on found or filtered jobs.",
+        help="Terminate found or filtered jobs with bkill.",
     )
     return parser.parse_args()
 
