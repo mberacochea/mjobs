@@ -21,7 +21,6 @@ import re
 import sys
 
 from rich.console import Console
-from rich.progress import track
 from rich.table import Table
 from rich.text import Text
 from rich_argparse import RichHelpFormatter
@@ -180,8 +179,7 @@ if __name__ == "__main__":
         )
 
     if not jobs:
-        text = Text("No jobs.", style="bold white", justify="left")
-        console.print(text)
+        console.print(Text("No jobs.", style="bold white", justify="left"))
         sys.exit(0)
 
     title = f"LSF jobs for {args.user or getpass.getuser()}"
@@ -210,6 +208,9 @@ if __name__ == "__main__":
     rows = []
 
     for job in sorted(jobs, key=lambda j: j["JOBID"]):
+        if "ERROR" in job:
+            console.print(f"The job {job['JOBID']} has an error: {job['ERROR']}")
+            continue
         job_name = Text(job["JOB_NAME"])
         pending_reason = Text(job["PEND_REASON"]) or Text("----", justify="center")
         if args.filter:
@@ -255,11 +256,14 @@ if __name__ == "__main__":
         console.print(table)
 
     if args.bkill:
-        for idx in track(range(len(jobs), description="Runnning bkill...")):
-            job = jobs[idx]
+        console.rule()
+        console.print(
+            Text("Running bkill for each job..."), style="bold white", justify="center"
+        )
+        for job in jobs:
             job_id = job["JOBID"]
             try:
-                lsf_bkill_output = lsf.bkill()
-                console.print(Text(lsf_bkill_output))
+                lsf_bkill_output = lsf.bkill(job_id)
+                console.print(lsf_bkill_output.replace("\n", ""))
             except Exception:
                 console.print(Text(f"bkill for {job_id} failed"), style="bold red")
