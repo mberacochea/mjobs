@@ -1,0 +1,6 @@
+version: '3'
+
+tasks:
+  build:
+    cmds:
+    - pyinstaller mjobs/main.py --onefile --clean --name mjobs

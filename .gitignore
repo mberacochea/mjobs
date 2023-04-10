@@ -267,3 +267,6 @@ pip-selfcheck.json
 build/
 dist/
 mjobs.spec
+
+# VSCode
+.vscode/

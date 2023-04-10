@@ -14,16 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
 import argparse
-import re
 import csv
+import getpass
+import re
+import sys
 
 from rich.console import Console
+from rich.progress import track
 from rich.table import Table
 from rich.text import Text
-
-import getpass
+from rich_argparse import RichHelpFormatter
 
 from mjobs import lsf
 
@@ -39,7 +40,9 @@ def _status_style(job_entry) -> Text:
 
 
 def _get_args():
-    parser = argparse.ArgumentParser(description="bjobs but a bit nicer")
+    parser = argparse.ArgumentParser(
+        description="bjobs but a bit nicer", formatter_class=RichHelpFormatter
+    )
     parser.add_argument(
         dest="job_id",
         help="Specifies the jobs or job arrays that bjobs displays.",
@@ -111,51 +114,70 @@ def _get_args():
         action="store_true",
         help="No fancy table, a good ol' tsv",
     )
+    parser.add_argument(
+        "-nh",
+        dest="no_header",
+        action="store_true",
+        help="Don't print the table header, useful to pipe the tsv ouput",
+    )
+    parser.add_argument(
+        "--bkill",
+        dest="bkill",
+        action="store_true",
+        help="Run `bkill` on found or filtered jobs.",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
-
     args = _get_args()
 
     console = Console()
 
     jobs = []
-    with console.status("Getting jobs from LSF...", spinner="monkey"):
-        lsf_args = []
-        if args.user:
-            lsf_args.extend(["-u", args.user])
-        if args.queue:
-            lsf_args.extend(["-q", args.queue])
-        if args.run:
-            lsf_args.extend(["-r"])
-        if args.all:
-            lsf_args.extend(["-a"])
-        if args.recent:
-            lsf_args.extend(["-d"])
-        if args.user_group:
-            lsf_args.extend(["-G", args.user_group])
-        if args.group:
-            lsf_args.extend(["-g", args.group])
-        if args.hosts:
-            lsf_args.extend(["-m", args.hosts])
-        if args.pend:
-            lsf_args.extend(["-p"])
+    lsf_args = []
 
-        try:
-            jobs = lsf.get_jobs(args.job_id, lsf_args)
-        except Exception:
-            console.print_exception()
+    if args.user:
+        lsf_args.extend(["-u", args.user])
+    if args.queue:
+        lsf_args.extend(["-q", args.queue])
+    if args.run:
+        lsf_args.extend(["-r"])
+    if args.all:
+        lsf_args.extend(["-a"])
+    if args.recent:
+        lsf_args.extend(["-d"])
+    if args.user_group:
+        lsf_args.extend(["-G", args.user_group])
+    if args.group:
+        lsf_args.extend(["-g", args.group])
+    if args.hosts:
+        lsf_args.extend(["-m", args.hosts])
+    if args.pend:
+        lsf_args.extend(["-p"])
 
-        if args.filter:
-            filter_regex = re.compile(args.filter)
-            jobs = list(
-                filter(
-                    lambda j: filter_regex.search(j["JOB_NAME"])
-                    or filter_regex.search(j["PEND_REASON"]),
-                    jobs,
-                )
+    try:
+        status = console.status("Getting jobs from LSF...")
+        if not args.tsv:
+            status.start()
+
+        jobs = lsf.get_jobs(args.job_id, lsf_args)
+
+        if not args.tsv:
+            status.stop()
+
+    except Exception:
+        console.print_exception()
+
+    if args.filter:
+        filter_regex = re.compile(args.filter)
+        jobs = list(
+            filter(
+                lambda j: filter_regex.search(j["JOB_NAME"])
+                or filter_regex.search(j["PEND_REASON"]),
+                jobs,
             )
+        )
 
     if not jobs:
         text = Text("No jobs.", style="bold white", justify="left")
@@ -188,7 +210,6 @@ if __name__ == "__main__":
     rows = []
 
     for job in sorted(jobs, key=lambda j: j["JOBID"]):
-
         job_name = Text(job["JOB_NAME"])
         pending_reason = Text(job["PEND_REASON"]) or Text("----", justify="center")
         if args.filter:
@@ -221,13 +242,24 @@ if __name__ == "__main__":
     if args.tsv:
         # print with no styles
         writer = csv.writer(sys.stdout, delimiter="\t")
-        writer.writerow([c.get("header") for c in cols])
+        if not args.no_header:
+            writer.writerow([c.get("header") for c in cols])
         writer.writerows(rows)
     else:
         # print the fancy table
-        table = Table(title=title, show_lines=True)
+        table = Table(title=title, show_lines=True, show_header=not args.no_header)
         for col in cols:
             table.add_column(**col)
         for row in rows:
             table.add_row(*row)
         console.print(table)
+
+    if args.bkill:
+        for idx in track(range(len(jobs), description="Runnning bkill...")):
+            job = jobs[idx]
+            job_id = job["JOBID"]
+            try:
+                lsf_bkill_output = lsf.bkill()
+                console.print(Text(lsf_bkill_output))
+            except Exception:
+                console.print(Text(f"bkill for {job_id} failed"), style="bold red")

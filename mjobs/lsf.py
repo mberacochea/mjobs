@@ -16,12 +16,12 @@
 
 import json
 from subprocess import check_output
-from typing import List, Optional
+from typing import Optional
 
 
 def _parse_bjobs(bjobs_output_str):
     """Parse records from bjobs json type output.
-    This snippet was taken from: https://github.com/DataBiosphere/toil/blob/eb2ae8365ae2ebdd50132570b20f7d480eb40cac/src/toil/batchSystems/lsf.py#L331
+    This snippet comes from: https://github.com/DataBiosphere/toil/blob/master/src/toil/batchSystems/lsf.py
     :param bjobs_output_str: stdout of bjobs json type output
     :return: list with the jobs
     """
@@ -39,7 +39,7 @@ def _parse_bjobs(bjobs_output_str):
     return []
 
 
-def get_jobs(job_ids: Optional[list[int]] = None, lsf_args: Optional[List[str]] = None):
+def get_jobs(job_ids: Optional[list[int]] = None, lsf_args: Optional[list[str]] = None):
     """bjobs command, it uses the json output and includes [stat, name and jobid].
     Any other parameters in lsf_args will be included in the call to bjobs.
     """
@@ -69,3 +69,8 @@ def get_jobs(job_ids: Optional[list[int]] = None, lsf_args: Optional[List[str]] 
     bjobs_output = check_output(args, universal_newlines=True)
     jobs = _parse_bjobs(bjobs_output)
     return jobs
+
+
+def bkill(job: int) -> None:
+    args = ["bkill", str(job)]
+    return check_output(args, universal_newlines=True)
