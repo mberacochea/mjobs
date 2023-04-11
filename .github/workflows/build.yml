@@ -7,7 +7,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-20.04
-    container: python:3.9-slim-buster
+    container: python:3.9-buster
 
     steps:
     - name: Check out repository code
