@@ -44,7 +44,7 @@ $ ./dist/main --help
 
 ### GH Actions binary
 
-This binary is build on Ubuntu 18.04 using python 3.9. This is done to maintain compatibility with the libc version use at EMBl-EBI. For more information -> https://pyinstaller.org/en/stable/usage.html#making-gnu-linux-apps-forward-compatible
+This binary is build the python 3.9 buster docker image. This is done to maintain compatibility with the libc version use at EMBl-EBI. For more information -> https://pyinstaller.org/en/stable/usage.html#making-gnu-linux-apps-forward-compatible
 
 
 # Download
