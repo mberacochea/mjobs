@@ -7,16 +7,19 @@ on:
 jobs:
   build:
     runs-on: ubuntu-20.04
-    container: ubuntu:18.04
+    container: python:3.9-slim-buster
 
     steps:
     - name: Check out repository code
       uses: actions/checkout@v3
 
-    - name: Create bundle
+    - name: Setup python
       run: |
         python3 -m venv venv
         source venv/bin/activate
+
+    - name: Create bundle
+      run: |
         pip install -r requirements-dev.txt
         pyinstaller mjobs/main.py --onefile --clean --name mjobs
 
