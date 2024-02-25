@@ -1,9 +1,9 @@
 [tool.ruff]
-line-length = 110
+line-length = 120
 
 [tool.isort]
 profile = "black"
 
 [tool.back]
-line-length = 110
+line-length = 120
 experimental-string-processing = true
