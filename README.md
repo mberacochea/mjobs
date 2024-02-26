@@ -1,8 +1,8 @@
 # mjobs
 
-A little tool to make it easier to inspect (IBM Spectrum LSF)[https://www.ibm.com/products/hpc-workload-management] (or just LSF) and [Slurm](https://slurm.schedmd.com/) jobs.
+A little tool to make it easier to inspect [IBM Spectrum LSF](https://www.ibm.com/products/hpc-workload-management) (or just LSF) and [Slurm](https://slurm.schedmd.com/) jobs.
 
-The program will auto detect [bjobs](https://www.ibm.com/docs/en/spectrum-lsf/10.1.0?topic=bjobs-options) under [LSF](https://www.ibm.com/products/hpc-workload-management), or [squeue][https://slurm.schedmd.com/squeue.html] in [Slurm](https://slurm.schedmd.com/).
+The program will auto detect [bjobs](https://www.ibm.com/docs/en/spectrum-lsf/10.1.0?topic=bjobs-options) under [LSF](https://www.ibm.com/products/hpc-workload-management), or [squeue](https://slurm.schedmd.com/squeue.html) in [Slurm](https://slurm.schedmd.com/).
 
 ## IBM LSF
 
