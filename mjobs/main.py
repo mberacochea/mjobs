@@ -25,15 +25,14 @@ from mjobs.slurm import Slurm
 if __name__ == "__main__":
 
     console = Console()
+    error_console = Console(stderr=True, style="bold red")
 
     if shutil.which("bjobs"):
-        lsf = LSF()
-        lsf.main(console)
+        lsf = LSF(console, error_console)
+        lsf.main()
     elif shutil.which("squeue"):
-        slurm = Slurm()
-        slurm.main(console)
+        slurm = Slurm(console, error_console)
+        slurm.main()
     else:
-        print(
-            "I can't find bjobs or slurm... so, I can't do anything.", file=sys.stderr
-        )
+        error_console.log("I can't find bjobs or slurm... so, I can't do anything.")
         sys.exit(1)

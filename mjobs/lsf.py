@@ -28,8 +28,8 @@ from mjobs.base import Base
 
 
 class LSF(Base):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, console: Console, error_console: Console):
+        super().__init__(console, error_console)
 
     def status_style(self, job_entry) -> Text:
         if job_entry["STAT"] == "RUN":
@@ -172,7 +172,7 @@ class LSF(Base):
         args = ["bkill", str(job)]
         return check_output(args, universal_newlines=True)
 
-    def main(self, console: Console):
+    def main(self):
         """Main execution point, should contain all the code to handle the LSF implementation"""
 
         self.get_args()
@@ -200,7 +200,7 @@ class LSF(Base):
             lsf_args.extend(["-p"])
 
         try:
-            status = console.status("Getting jobs from LSF...")
+            status = self.console.status("Getting jobs from LSF...")
             if not self.args.tsv:
                 status.start()
 
@@ -210,7 +210,9 @@ class LSF(Base):
                 status.stop()
 
         except Exception:
-            console.print_exception()
+            if not self.args.tsv:
+                status.stop()
+            self.console.print_exception()
 
         if self.args.filter:
             filter_regex = re.compile(self.args.filter)
@@ -223,7 +225,7 @@ class LSF(Base):
             )
 
         if not jobs:
-            console.print(Text("No jobs.", style="bold white", justify="left"))
+            self.console.print(Text("No jobs.", style="bold white", justify="left"))
             sys.exit(0)
 
         title = f"LSF jobs for {self.args.user or getpass.getuser()}"
@@ -253,7 +255,9 @@ class LSF(Base):
 
         for job in sorted(jobs, key=lambda j: j["JOBID"]):
             if "ERROR" in job:
-                console.print(f"The job {job['JOBID']} has an error: {job['ERROR']}")
+                self.error_console.log(
+                    f"The job {job['JOBID']} has an error: {job['ERROR']}"
+                )
                 continue
             job_name = Text(job["JOB_NAME"])
             pending_reason = Text(job["PEND_REASON"]) or Text("----", justify="center")
@@ -284,11 +288,11 @@ class LSF(Base):
 
             rows.append(row)
 
-        self.render(title=title, console=console, columns=cols, rows=rows)
+        self.render(title=title, columns=cols, rows=rows)
 
         if self.args.bkill:
-            console.rule()
-            console.print(
+            self.console.rule()
+            self.console.print(
                 Text("Running bkill for each job..."),
                 style="bold white",
                 justify="center",
@@ -297,6 +301,8 @@ class LSF(Base):
                 job_id = job["JOBID"]
                 try:
                     lsf_bkill_output = self.bkill(job_id)
-                    console.print(lsf_bkill_output.replace("\n", ""))
+                    self.console.print(lsf_bkill_output.replace("\n", ""))
                 except Exception:
-                    console.print(Text(f"bkill for {job_id} failed"), style="bold red")
+                    self.error_console.print(
+                        Text(f"bkill for {job_id} failed"), style="bold red"
+                    )

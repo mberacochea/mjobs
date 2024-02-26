@@ -14,11 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import datetime
 import getpass
 import json
 import re
 import sys
-from subprocess import check_output
+from subprocess import CalledProcessError, check_output
 from typing import Optional
 
 from rich.console import Console
@@ -28,8 +29,8 @@ from mjobs.base import Base
 
 
 class Slurm(Base):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, console: Console, error_console: Console):
+        super().__init__(console, error_console)
 
     def status_style(self, job_entry) -> Text:
         colours = {
@@ -43,10 +44,36 @@ class Slurm(Base):
         )
 
     def get_args(self):
+        JOB_STATES = [
+            "pending",
+            "running",
+            "suspended",
+            "completed",
+            "cancelled",
+            "failed",
+            "timeout",
+            "node_fail",
+            "preempted",
+            "boot_fail",
+            "deadline",
+            "out_of_memory",
+            "completing",
+            "configuring",
+            "resizing",
+            "resv_del_hold",
+            "requeued",
+            "requeue_fed",
+            "requeue_hold",
+            "revoked",
+            "signaling",
+            "special_exit",
+            "stage_out",
+            "stopped",
+        ]
         parser = super().get_args("squeue")
         parser.add_argument(
             dest="job_id",
-            help="Specifies the jobs or job arrays that bjobs displays.",
+            help="Specifies the jobs or job arrays that squeue displays.",
             nargs="*",
         )
         parser.add_argument(
@@ -62,8 +89,7 @@ class Slurm(Base):
             "--user",
             dest="user",
             required=False,
-            help="""
-            Request jobs or job steps from a comma separated list of users.
+            help="""Request jobs or job steps from a comma separated list of users.
             The list can consist of user names or user id numbers.
             Performance of the command can be measurably improved for systems with
             large numbers of jobs when a single user is specified.
@@ -73,23 +99,22 @@ class Slurm(Base):
             "-t",
             "--states",
             dest="states",
-            required=False,
-            help="""
-            Specify the states of jobs to view. Accepts a comma separated list of state names or 'all'.
+            choices=JOB_STATES,
+            nargs="+",
+            help="""Specify the states of jobs to view. Accepts a comma separated list of state names or 'all'.
             If 'all' is specified then jobs of all states will be reported.
             If no state is specified then pending, running, and completing jobs are reported.
             See the JOB STATE CODES section below for a list of valid states.
             Both extended and compact forms are valid.
-            Note the <state_list> supplied is case insensitive ('pd' and 'PD' are equivalent).
+            Note the <state_list> supplied is case insensitive ('pending' and 'PENDING' are equivalent).
             """,
         )
         parser.add_argument(
             "-w",
             "--nodelist",
             dest="nodelist",
-            required=False,
-            help="""
-            Report only on jobs allocated to the specified node or list of nodes.
+            nargs="+",
+            help="""Report only on jobs allocated to the specified node or list of nodes.
             This may either be the NodeName or NodeHostname as defined in slurm.conf(5) in the event that they differ.
             A node_name of localhost is mapped to the current host name.
             """,
@@ -111,11 +136,26 @@ class Slurm(Base):
         if args:
             squeue_args.extend(list(map(str, args)))
         if job_ids:
-            squeue_args.extend(["--job", " ".join(list(map(str, job_ids)))])
-        squeue_output = check_output(squeue_args, universal_newlines=True)
-        return json.loads(squeue_output).get("jobs", [])
+            squeue_args.extend(["--jobs", ",".join(list(map(str, job_ids)))])
+        try:
+            squeue_output = check_output(squeue_args, universal_newlines=True)
+            return json.loads(squeue_output).get("jobs", [])
+        except CalledProcessError as ex:
+            self.error_console.log(
+                f"squeue call failed. Arguments: {' '.join(squeue_args)}. Error {ex.output}"
+            )
+            raise ex
 
-    def main(self, console: Console):
+    def convert_unix_timestamp(self, timestamp: Optional[int]) -> str:
+        if timestamp is None:
+            return f"Invalid timestamp. {timestamp}"
+        try:
+            dt_object = datetime.datetime.utcfromtimestamp(timestamp)
+            return str(dt_object)
+        except (TypeError, ValueError):
+            return f"Invalid timestamp. {timestamp}"
+
+    def main(self):
         """Main execution point, should contain all the code to handle the Slurm implementation"""
 
         self.get_args()
@@ -127,13 +167,13 @@ class Slurm(Base):
             extra_args.extend(["-u", self.args.user])
         if self.args.partition:
             extra_args.extend(["-p", self.args.partition])
-        if self.args.states:
-            extra_args.extend(["-t", self.args.states])
-        if self.args.nodelist:
-            extra_args.extend(["-w", self.args.nodelist])
+        for state in self.args.states or []:
+            extra_args.extend(["-t", state])
+        for node in self.args.nodelist or []:
+            extra_args.extend(["-w", node])
 
         try:
-            status = console.status("Getting jobs from Slurm...")
+            status = self.console.status("Getting jobs from Slurm...")
             if not self.args.tsv:
                 status.start()
 
@@ -142,8 +182,15 @@ class Slurm(Base):
             if not self.args.tsv:
                 status.stop()
 
+        except CalledProcessError:
+            # This is handled by get_jobs
+            if not self.args.tsv:
+                status.stop()
+            sys.exit(1)
         except Exception:
-            console.print_exception()
+            if not self.args.tsv:
+                status.stop()
+            self.console.print_exception()
 
         if self.args.filter:
             filter_regex = re.compile(self.args.filter)
@@ -156,7 +203,7 @@ class Slurm(Base):
             )
 
         if not jobs:
-            console.print(Text("No jobs.", style="bold white", justify="left"))
+            self.console.print(Text("No jobs.", style="bold white", justify="left"))
             sys.exit(0)
 
         title = f"Slurm jobs for {self.args.user or getpass.getuser()}"
@@ -194,10 +241,9 @@ class Slurm(Base):
                 job_name,
                 job["user_name"],
                 job["partition"],
-                # TODO: Convert to something useful
-                str(job["submit_time"]),
-                str(job["start_time"]),
-                str(job["end_time"]),
+                self.convert_unix_timestamp(job["submit_time"]),
+                self.convert_unix_timestamp(job["start_time"]),
+                self.convert_unix_timestamp(job["end_time"]),
                 # pending_reason,
             ]
             if self.args.extended:
@@ -211,4 +257,4 @@ class Slurm(Base):
 
             rows.append(row)
 
-        self.render(title=title, console=console, columns=cols, rows=rows)
+        self.render(title=title, columns=cols, rows=rows)

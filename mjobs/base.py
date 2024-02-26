@@ -25,6 +25,14 @@ from rich_argparse import RichHelpFormatter
 
 
 class Base(ABC):
+    def __init__(self, console: Console, error_console: Console) -> None:
+        """console is the default one to print content
+        error_console will be used to print error messages
+        """
+        self.console = console
+        self.error_console = console
+        super().__init__()
+
     def get_args(self, implementation_name: str):
         """Base arguments that every implementation should support"""
         parser = argparse.ArgumentParser(
@@ -54,7 +62,6 @@ class Base(ABC):
 
     def render(
         self,
-        console: Console,
         title: str,
         columns: list[dict[str, any]],
         rows: list[dict[str, any]],
@@ -75,9 +82,9 @@ class Base(ABC):
                 table.add_column(**col)
             for row in rows:
                 table.add_row(*row)
-            console.print(table)
+            self.console.print(table)
 
-    def main(self, console: Console):
+    def main(self):
         """Main execution point.
         Should handle the logic to get jobs, build the table and any other features"""
         pass
