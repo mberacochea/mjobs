@@ -1,5 +1,5 @@
 -r requirements.txt
-pyinstaller==5.9.0
+pyinstaller==5.13.1
 black==24.2.0
 isort==5.13.2
 ruff==0.2.2
