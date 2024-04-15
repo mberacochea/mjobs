@@ -168,7 +168,7 @@ class Slurm(Base):
         if args:
             squeue.extend(list(map(str, args)))
         if job_ids:
-            squeue.extend([",".join(list(map(str, job_ids)))])
+            squeue.extend(["-j", ",".join(list(map(str, job_ids)))])
         try:
             squeue_output = check_output(squeue, universal_newlines=True).split("\n")
             for line in squeue_output:
