@@ -2,6 +2,7 @@ version: '3'
 
 tasks:
   build:
+    desc: Build and scp into the cluster
     cmds:
     - pyinstaller mjobs/main.py --onefile --clean --name mjobs
     - scp dist/mjobs codon:~/
