@@ -23,6 +23,8 @@ from rich.console import Console
 from rich.table import Table
 from rich_argparse import RichHelpFormatter
 
+from .version import VERSION
+
 
 class Base(ABC):
     def __init__(self, console: Console, error_console: Console) -> None:
@@ -57,6 +59,9 @@ class Base(ABC):
             dest="no_header",
             action="store_true",
             help="Don't print the table header, useful to pipe the tsv output",
+        )
+        parser.add_argument(
+            "--version", help="Version", action="version", version=VERSION
         )
         return parser
 
