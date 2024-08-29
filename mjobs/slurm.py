@@ -138,7 +138,7 @@ class Slurm(Base):
             ["%.18i", "job_id"],       # job id
             ["%.50j", "job_name"],     # job name
             ["%l", "time_limit"],      # time limit for the job (it can be NOT_SET), format: days-hours:minutes:seconds
-            ["%m", "memory"],          #  Minimum size of memory (in MB) requested by the job
+            ["%m", "memory"],          # Minimum size of memory (in MB) requested by the job
             ["%.10P", "partition"],    # Partition of the job or job step.
             ["%T", "job_state"],       # Job state in extended form.
             ["%u", "user_name"],       # User name for a job or job step.
@@ -147,14 +147,12 @@ class Slurm(Base):
             ["%S", "start_time"],      # Job start time, format: days-hours:minutes:seconds.
             ["%V", "submit_time"],     # Job submission time, format: days-hours:minutes:seconds.
             ["%L", "end_time"],        # time left (it can be NOT_SET), format: days-hours:minutes:seconds
-            ["%.N", "nodes"],          # List of nodes allocated to the job or job step.
             ["%.100Z", "workdir"],     # Working directory
+            ["%.N", "nodes"],          # List of nodes allocated to the job or job step.
         ]
         # fmt: on
 
         SlurmJob = namedtuple("SlurmJob", " ".join(x[1] for x in squeue_fields))
-
-        len_flags = len(squeue_fields)
 
         jobs = []
 
@@ -172,9 +170,12 @@ class Slurm(Base):
         try:
             squeue_output = check_output(squeue, universal_newlines=True).split("\n")
             for line in squeue_output:
-                values = line.strip('"').split()
-                if len(values) < len_flags:
+                if line.strip() == "":
                     continue
+                values = line.strip('"').split()
+                # For jobs that are pending, the nodes field will be missing from the output
+                if "-t" in args and "pending" in args:
+                    values.append("---")
                 jobs.append(SlurmJob(*values))
 
             return jobs
