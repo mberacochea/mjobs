@@ -172,10 +172,13 @@ class Slurm(Base):
             for line in squeue_output:
                 if line.strip() == "":
                     continue
+
+                # TODO we need a more robust parsing mechanism
                 values = line.strip('"').split()
-                # For jobs that are pending, the nodes field will be missing from the output
-                if "-t" in args and "pending" in args:
-                    values.append("---")
+                if len(values) == len(squeue_fields) - 1:
+                    # The nodes are missing, as the job is not running
+                    values.append("-----")
+
                 jobs.append(SlurmJob(*values))
 
             return jobs
