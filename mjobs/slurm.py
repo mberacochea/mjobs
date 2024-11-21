@@ -136,13 +136,13 @@ class Slurm(Base):
         # fmt: off
         squeue_fields = [
             ["%.18i", "job_id"],       # job id
-            ["%.50j", "job_name"],     # job name
+            ["%.200j", "job_name"],     # job name
             ["%l", "time_limit"],      # time limit for the job (it can be NOT_SET), format: days-hours:minutes:seconds
             ["%m", "memory"],          # Minimum size of memory (in MB) requested by the job
-            ["%.10P", "partition"],    # Partition of the job or job step.
+            ["%.50P", "partition"],    # Partition of the job or job step.
             ["%T", "job_state"],       # Job state in extended form.
             ["%u", "user_name"],       # User name for a job or job step.
-            ["%.20o", "command"],      # The command to be executed.
+            ["%.200o", "command"],      # The command to be executed.
             ["%.20r", "state_reason"], # The reason for the job status.
             ["%S", "start_time"],      # Job start time, format: days-hours:minutes:seconds.
             ["%V", "submit_time"],     # Job submission time, format: days-hours:minutes:seconds.
@@ -160,7 +160,7 @@ class Slurm(Base):
             "squeue",
             "-h",
             "--format",
-            f"\"{' '.join(x[0] for x in squeue_fields)}\"",
+            f"\"{'|'.join(x[0] for x in squeue_fields)}\"",
         ]
 
         if args:
@@ -168,13 +168,14 @@ class Slurm(Base):
         if job_ids:
             squeue.extend(["-j", ",".join(list(map(str, job_ids)))])
         try:
+            print(check_output(squeue, universal_newlines=True))
             squeue_output = check_output(squeue, universal_newlines=True).split("\n")
             for line in squeue_output:
                 if line.strip() == "":
                     continue
 
                 # TODO we need a more robust parsing mechanism
-                values = line.strip('"').split()
+                values = [element.strip() for element in line.strip('"').split("|")]
                 if len(values) == len(squeue_fields) - 1:
                     # The nodes are missing, as the job is not running
                     values.append("-----")
