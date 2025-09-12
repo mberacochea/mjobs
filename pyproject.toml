@@ -1,9 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mjobs"
+dynamic = ["version"]
+description = "Just like squeue/bjobs but a bit nicer"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.8.1"
+authors = [
+    {name = "Martin Beracochea"},
+]
+dependencies = [
+    "rich>=13.7.0",
+    "rich-argparse>=1.4.0",
+    "textual>=0.75.1",
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+build = ["pyinstaller>=6.0.0"]
+dev = ["pyinstaller>=6.0.0", "ruff>=0.1.0", "pytest>=7.0.0"]
+
+[project.scripts]
+mjobs = "mjobs.main:main"
+
+[tool.hatch.version]
+path = "mjobs/version.py"
+pattern = "VERSION = ['\"](?P<version>[^'\"]+)['\"]"
+
 [tool.ruff]
 line-length = 120
 
 [tool.isort]
 profile = "black"
 
-[tool.back]
+[tool.black]
 line-length = 120
 experimental-string-processing = true

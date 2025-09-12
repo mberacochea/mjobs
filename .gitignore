@@ -270,3 +270,7 @@ mjobs.spec
 
 # VSCode
 .vscode/
+
+# UV - Ruff
+.ruff_cache/
+.uv-cache/
