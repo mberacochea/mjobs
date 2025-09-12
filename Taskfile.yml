@@ -1,13 +1,90 @@
 version: '3'
 
 tasks:
-  build:
-    desc: Build and scp into the cluster
+  install:
+    desc: Install dependencies
     cmds:
-    - pyinstaller mjobs/main.py --onefile --clean --name mjobs
+      - uv sync
+
+  dev:
+    desc: Install with dev dependencies
+    cmds:
+      - uv sync --extra dev
+
+  run:
+    desc: Run mjobs with uv
+    cmds:
+      - uv run mjobs {{.CLI_ARGS}}
+
+  run-dashboard:
+    desc: Run mjobs dashboard with test data
+    cmds:
+      - uv run mjobs --dashboard --test-data
+
+  lint:
+    desc: Run linting with ruff
+    cmds:
+      - uv run ruff check .
+
+  lint-fix:
+    desc: Fix linting issues with ruff
+    cmds:
+      - uv run ruff check --fix .
+
+  format:
+    desc: Format code with ruff
+    cmds:
+      - uv run ruff format .
+
+  format-check:
+    desc: Check code formatting
+    cmds:
+      - uv run ruff format --check .
+
+  test:
+    desc: Run tests
+    cmds:
+      - uv run pytest
+    ignore_error: true
+
+  build:
+    desc: Build standalone binary with pyinstaller
+    cmds:
+      - uv sync --extra build
+      - uv run pyinstaller mjobs/main.py --onefile --clean --name mjobs
+
+
+  build-docker:
+    desc: Build Docker image for cross-compilation
+    cmds:
+      - docker build -t mjobs-builder . --platform linux/amd64
+
+  build-linux:
+    desc: Cross-compile Linux binary
+    deps: [build-docker]
+    cmds:
+      - mkdir -p dist
+      - |
+        docker run --rm -u $(id -u):$(id -g) \
+          -v $(pwd):/app \
+          -v $(pwd)/dist:/app/dist \
+          --platform linux/amd64 \
+          -e UV_CACHE_DIR=/app/.uv-cache \
+          mjobs-builder \
+          sh -c "uv sync --extra build && uv run pyinstaller mjobs/main.py --onefile --clean --name mjobs --distpath /app/dist"
 
   upload:
-    desc: SCP to codon
-    deps: [build]
+      desc: SCP to codon
+      cmds:
+      - scp dist/mjobs codon:~/
+
+  clean:
+    desc: Clean build artifacts and cache
     cmds:
-    - scp dist/mjobs codon:~/
+      - rm -rf dist/ build/ *.spec .ruff_cache/ .uv-cache/
+      - find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+      - find . -name "*.pyc" -delete
+
+  check:
+    desc: Run all checks (lint, format)
+    deps: [lint, format-check]

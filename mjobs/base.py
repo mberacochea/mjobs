@@ -60,8 +60,19 @@ class Base(ABC):
             action="store_true",
             help="Don't print the table header, useful to pipe the tsv output",
         )
+        parser.add_argument("--version", help="Version", action="version", version=VERSION)
         parser.add_argument(
-            "--version", help="Version", action="version", version=VERSION
+            "-d",
+            "--dashboard",
+            dest="dashboard",
+            action="store_true",
+            help="Launch interactive dashboard mode",
+        )
+        parser.add_argument(
+            "--test-data",
+            dest="test_data",
+            action="store_true",
+            help="Use fake test data (useful for development)",
         )
         return parser
 
@@ -80,9 +91,7 @@ class Base(ABC):
             writer.writerows(rows)
         else:
             # print the fancy table
-            table = Table(
-                title=title, show_lines=True, show_header=not self.args.no_header
-            )
+            table = Table(title=title, show_lines=True, show_header=not self.args.no_header)
             for col in columns:
                 table.add_column(**col)
             for row in rows:

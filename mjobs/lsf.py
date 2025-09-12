@@ -59,9 +59,7 @@ class LSF(Base):
             required=False,
             help="Displays jobs in the specified user",
         )
-        parser.add_argument(
-            "-r", dest="run", action="store_true", help="Displays running jobs."
-        )
+        parser.add_argument("-r", dest="run", action="store_true", help="Displays running jobs.")
         parser.add_argument(
             "-a",
             dest="all",
@@ -135,9 +133,7 @@ class LSF(Base):
             raise ValueError(f"Could not find bjobs output json in: {bjobs_output_str}")
         return []
 
-    def get_jobs(
-        self, job_ids: Optional[list[int]] = None, lsf_args: Optional[list[str]] = None
-    ):
+    def get_jobs(self, job_ids: Optional[list[int]] = None, lsf_args: Optional[list[str]] = None):
         """bjobs command, it uses the json output and includes [stat, name and jobid].
         Any other parameters in lsf_args will be included in the call to bjobs.
         """
@@ -218,8 +214,7 @@ class LSF(Base):
             filter_regex = re.compile(self.args.filter)
             jobs = list(
                 filter(
-                    lambda j: filter_regex.search(j["JOB_NAME"])
-                    or filter_regex.search(j["PEND_REASON"]),
+                    lambda j: filter_regex.search(j["JOB_NAME"]) or filter_regex.search(j["PEND_REASON"]),
                     jobs,
                 )
             )
@@ -255,9 +250,7 @@ class LSF(Base):
 
         for job in sorted(jobs, key=lambda j: j["JOBID"]):
             if "ERROR" in job:
-                self.error_console.log(
-                    f"The job {job['JOBID']} has an error: {job['ERROR']}"
-                )
+                self.error_console.log(f"The job {job['JOBID']} has an error: {job['ERROR']}")
                 continue
             job_name = Text(job["JOB_NAME"])
             pending_reason = Text(job["PEND_REASON"]) or Text("----", justify="center")
@@ -303,6 +296,4 @@ class LSF(Base):
                     lsf_bkill_output = self.bkill(job_id)
                     self.console.print(lsf_bkill_output.replace("\n", ""))
                 except Exception:
-                    self.error_console.print(
-                        Text(f"bkill for {job_id} failed"), style="bold red"
-                    )
+                    self.error_console.print(Text(f"bkill for {job_id} failed"), style="bold red")

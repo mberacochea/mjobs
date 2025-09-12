@@ -17,20 +17,21 @@
 import getpass
 import re
 import sys
-from collections import namedtuple
 from datetime import datetime
-from subprocess import CalledProcessError, check_output
-from typing import Optional
+from subprocess import CalledProcessError
+from typing import Any, Dict, Optional
 
 from rich.console import Console
 from rich.text import Text
 
 from mjobs.base import Base
+from mjobs.data import JobRepository
 
 
 class Slurm(Base):
-    def __init__(self, console: Console, error_console: Console):
+    def __init__(self, console: Console, error_console: Console, job_repository: Optional[JobRepository] = None):
         super().__init__(console, error_console)
+        self.job_repository = job_repository
 
     def status_style(self, job_state) -> Text:
         colours = {
@@ -129,65 +130,18 @@ class Slurm(Base):
         self.args = parser.parse_args()
         return parser
 
-    def get_jobs(
-        self, job_ids: Optional[list[int]] = None, args: Optional[list[str]] = None
-    ):
-        """Call squeue to obtain the jobs, it uses the json output."""
-        # fmt: off
-        squeue_fields = [
-            ["%.18i", "job_id"],       # job id
-            ["%.200j", "job_name"],     # job name
-            ["%l", "time_limit"],      # time limit for the job (it can be NOT_SET), format: days-hours:minutes:seconds
-            ["%m", "memory"],          # Minimum size of memory (in MB) requested by the job
-            ["%.50P", "partition"],    # Partition of the job or job step.
-            ["%T", "job_state"],       # Job state in extended form.
-            ["%u", "user_name"],       # User name for a job or job step.
-            ["%.200o", "command"],      # The command to be executed.
-            ["%.20r", "state_reason"], # The reason for the job status.
-            ["%S", "start_time"],      # Job start time, format: days-hours:minutes:seconds.
-            ["%V", "submit_time"],     # Job submission time, format: days-hours:minutes:seconds.
-            ["%L", "end_time"],        # time left (it can be NOT_SET), format: days-hours:minutes:seconds
-            ["%.100Z", "workdir"],     # Working directory
-            ["%.N", "nodes"],          # List of nodes allocated to the job or job step.
-        ]
-        # fmt: on
+    def get_jobs(self, job_ids: Optional[list[int]] = None, args: Optional[list[str]] = None):
+        """Get jobs using the repository pattern.
 
-        SlurmJob = namedtuple("SlurmJob", " ".join(x[1] for x in squeue_fields))
+        :param job_ids: Specific job IDs to fetch (optional)
+        :param args: Additional arguments for job filtering (optional)
+        :return: List of SlurmJob instances
+        :raises ValueError: If no repository is configured
+        """
+        if not self.job_repository:
+            raise ValueError("No job repository configured. This should not happen in the new architecture.")
 
-        jobs = []
-
-        squeue = [
-            "squeue",
-            "-h",
-            "--format",
-            f"\"{'|'.join(x[0] for x in squeue_fields)}\"",
-        ]
-
-        if args:
-            squeue.extend(list(map(str, args)))
-        if job_ids:
-            squeue.extend(["-j", ",".join(list(map(str, job_ids)))])
-        try:
-            squeue_output = check_output(squeue, universal_newlines=True).split("\n")
-            for line in squeue_output:
-                if line.strip() == "":
-                    continue
-
-                # TODO we need a more robust parsing mechanism
-                values = [element.strip() for element in line.strip('"').split("|")]
-                if len(values) == len(squeue_fields) - 1:
-                    # The nodes are missing, as the job is not running
-                    values.append("-----")
-
-                jobs.append(SlurmJob(*values))
-
-            return jobs
-
-        except CalledProcessError as ex:
-            self.error_console.log(
-                f"squeue call failed. Arguments: {' '.join(squeue)}. Error {ex.output}"
-            )
-            raise ex
+        return self.job_repository.get_jobs(job_ids, args)
 
     def parse_timestamp_str(self, timestamp: Optional[int]) -> str:
         if timestamp is None:
@@ -198,10 +152,29 @@ class Slurm(Base):
         except (TypeError, ValueError):
             return f"Invalid timestamp. {timestamp}"
 
+    def get_job_details(self, job_id: str) -> Dict[str, Any]:
+        """Get detailed job information using the repository pattern.
+
+        :param job_id: The job ID to get details for
+        :return: Dictionary containing parsed job details
+        :raises ValueError: If no repository is configured
+        """
+        if not self.job_repository:
+            raise ValueError("No job repository configured. This should not happen in the new architecture.")
+
+        return self.job_repository.get_job_details(job_id)
+
     def main(self):
         """Main execution point, should contain all the code to handle the Slurm implementation"""
 
         self.get_args()
+
+        # Check if dashboard mode is requested
+        if self.args.dashboard:
+            from mjobs.dashboard import launch_dashboard
+
+            launch_dashboard(self)
+            return
 
         jobs = []
         extra_args = []
@@ -239,8 +212,7 @@ class Slurm(Base):
             filter_regex = re.compile(self.args.filter)
             jobs = list(
                 filter(
-                    lambda j: filter_regex.search(j.job_name)
-                    or filter_regex.search(j.command),
+                    lambda j: filter_regex.search(j.job_name) or filter_regex.search(j.command),
                     jobs,
                 )
             )
