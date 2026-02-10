@@ -183,6 +183,9 @@ class AutoRefreshScreen(ModalScreen[str]):
         self.dismiss("")
 
 
+ACTIVE_STATES = {"PENDING", "RUNNING", "COMPLETING"}
+
+
 class Dashboard(App):
     """Main dashboard application."""
 
@@ -241,6 +244,7 @@ class Dashboard(App):
         Binding("ctrl+e", "copy_stderr_path", "Copy StdErr Path"),
         Binding("x", "kill_job", "Kill Job"),
         Binding("ctrl+r", "toggle_auto_refresh", "Auto Refresh"),
+        Binding("h", "toggle_show_all", "Show All Jobs"),
     ]
 
     def __init__(self, slurm_instance, **kwargs):
@@ -250,6 +254,7 @@ class Dashboard(App):
         self.details_visible = False
         self.auto_refresh_timer = None
         self.auto_refresh_interval: int = 0
+        self.show_all_jobs: bool = False
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -275,7 +280,12 @@ class Dashboard(App):
         try:
             # Get jobs from slurm instance (could be real or test implementation)
             extra_args = self._build_extra_args()
-            self.jobs = self.slurm.get_jobs(self.slurm.args.job_id, extra_args)
+            all_jobs = self.slurm.get_jobs(self.slurm.args.job_id, extra_args)
+
+            if self.show_all_jobs:
+                self.jobs = all_jobs
+            else:
+                self.jobs = [j for j in all_jobs if j.job_state in ACTIVE_STATES]
 
             # Update table
             jobs_table = self.query_one("#jobs_table", JobsTable)
@@ -454,6 +464,15 @@ class Dashboard(App):
                 self.notify(f"Failed to cancel job {selected_job.job_id}: {e}", severity="error")
 
         self.push_screen(ConfirmKillScreen(selected_job.job_id, selected_job.job_name), handle_confirm)
+
+    def action_toggle_show_all(self):
+        """Toggle between showing active jobs only or all jobs."""
+        self.show_all_jobs = not self.show_all_jobs
+        self.refresh_jobs()
+        if self.show_all_jobs:
+            self.notify("Showing all jobs", timeout=2)
+        else:
+            self.notify("Showing active jobs only", timeout=2)
 
     def action_toggle_auto_refresh(self):
         """Toggle auto-refresh on/off."""
