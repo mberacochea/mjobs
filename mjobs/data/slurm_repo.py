@@ -85,6 +85,21 @@ class SlurmRepository(JobRepository):
         except Exception as e:
             raise JobRepositoryError(f"Failed to get job details for {job_id}: {e}", original_error=e)
 
+    def cancel_job(self, job_id: str) -> None:
+        """Cancel a job using scancel.
+
+        :param job_id: The job ID to cancel
+        :raises JobRepositoryError: If scancel command fails
+        """
+        try:
+            check_output(["scancel", str(job_id)], universal_newlines=True)
+        except CalledProcessError as e:
+            raise JobRepositoryError(
+                f"scancel {job_id} failed with exit code {e.returncode}: {e}", original_error=e
+            )
+        except Exception as e:
+            raise JobRepositoryError(f"Failed to cancel job {job_id}: {e}", original_error=e)
+
     def _build_squeue_command(self, job_ids: Optional[List[int]], extra_args: Optional[List[str]]) -> List[str]:
         """Build the squeue command with proper formatting and arguments.
 

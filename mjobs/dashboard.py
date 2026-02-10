@@ -84,6 +84,53 @@ class SearchScreen(ModalScreen[str]):
         self.action_submit()
 
 
+class ConfirmKillScreen(ModalScreen[bool]):
+    """Modal confirmation dialog for killing a job."""
+
+    BINDINGS = [
+        Binding("y", "confirm", "Yes"),
+        Binding("enter", "confirm", "Confirm"),
+        Binding("n", "cancel", "No"),
+        Binding("escape", "cancel", "Cancel"),
+    ]
+
+    CSS = """
+    ConfirmKillScreen {
+        align: center middle;
+    }
+
+    #confirm_dialog {
+        width: 70;
+        height: 12;
+        border: thick $background 80%;
+        background: $surface;
+        padding: 2;
+    }
+
+    #confirm_dialog Label {
+        margin: 1 1;
+        text-align: center;
+        width: 1fr;
+    }
+    """
+
+    def __init__(self, job_id: str, job_name: str, **kwargs):
+        super().__init__(**kwargs)
+        self.job_id = job_id
+        self.job_name = job_name
+
+    def compose(self) -> ComposeResult:
+        with Container(id="confirm_dialog"):
+            yield Label(f"Kill job {self.job_id} ({self.job_name})?")
+            yield Label("[y/Enter] Confirm  [n/Escape] Cancel")
+
+    def action_confirm(self):
+        self.dismiss(True)
+
+    def action_cancel(self):
+        self.dismiss(False)
+
+
 class Dashboard(App):
     """Main dashboard application."""
 
@@ -140,6 +187,7 @@ class Dashboard(App):
         Binding("e", "open_stderr", "Open StdErr"),
         Binding("ctrl+o", "copy_stdout_path", "Copy StdOut Path"),
         Binding("ctrl+e", "copy_stderr_path", "Copy StdErr Path"),
+        Binding("x", "kill_job", "Kill Job"),
     ]
 
     def __init__(self, slurm_instance, **kwargs):
@@ -323,6 +371,27 @@ class Dashboard(App):
             self.notify(f"{file_type} path copied: {file_path}", timeout=3)
         except Exception as e:
             self.notify(f"Failed to copy {file_type} path: {e}", severity="error")
+
+    def action_kill_job(self):
+        """Kill the selected job after confirmation."""
+        jobs_table = self.query_one("#jobs_table", JobsTable)
+        selected_job = jobs_table.get_selected_job()
+
+        if not selected_job:
+            self.notify("No job selected", severity="warning")
+            return
+
+        def handle_confirm(confirmed: bool):
+            if not confirmed:
+                return
+            try:
+                self.slurm.cancel_job(selected_job.job_id)
+                self.notify(f"Job {selected_job.job_id} cancelled", timeout=3)
+                self.refresh_jobs()
+            except Exception as e:
+                self.notify(f"Failed to cancel job {selected_job.job_id}: {e}", severity="error")
+
+        self.push_screen(ConfirmKillScreen(selected_job.job_id, selected_job.job_name), handle_confirm)
 
     def action_quit(self):
         """Quit the application."""

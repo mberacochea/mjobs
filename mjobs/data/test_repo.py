@@ -183,6 +183,13 @@ class TestJobRepository(JobRepository):
             "MCS_label": "N/A",
         }
 
+    def cancel_job(self, job_id: str) -> None:
+        """No-op cancel for test data.
+
+        :param job_id: The job ID to cancel (ignored)
+        """
+        pass
+
     def _generate_random_job(self) -> SlurmJob:
         """Generate a completely random job."""
         job_id = str(random.randint(100000, 999999))
