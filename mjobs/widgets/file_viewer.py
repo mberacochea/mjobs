@@ -29,6 +29,7 @@ class FileViewerScreen(ModalScreen[None]):
     BINDINGS = [
         Binding("escape", "close", "Close"),
         Binding("q", "close", "Close"),
+        Binding("f", "toggle_follow", "Follow"),
         Binding("g", "go_to_top", "Go to Top"),
         Binding("G", "go_to_bottom", "Go to Bottom"),
         Binding("j", "scroll_down", "Scroll Down"),
@@ -68,8 +69,10 @@ class FileViewerScreen(ModalScreen[None]):
     def __init__(self, file_path: str, **kwargs):
         super().__init__(**kwargs)
         self.file_path = file_path
-        self.file_lines = []
+        self.file_lines: list[str] = []
         self.error_message = ""
+        self.following: bool = False
+        self.follow_timer = None
 
     def compose(self) -> ComposeResult:
         """Create the file viewer interface."""
@@ -121,14 +124,19 @@ class FileViewerScreen(ModalScreen[None]):
         except Exception as e:
             self.error_message = f"Error reading file: {str(e)}"
 
-    def display_content(self) -> None:
-        """Display the file content in the RichLog widget."""
-        # Update header
+    def _update_header(self) -> None:
+        """Update the header bar, showing [FOLLOWING] indicator when active."""
         header_widget = self.query_one("#file_header", RichLog)
         header_widget.clear()
+        follow_indicator = " [bold yellow]\\[FOLLOWING][/bold yellow]" if self.following else ""
         header_widget.write(
-            f"[bold]File: {self.file_path}[/bold] (Press ESC/Q to close, g/G for top/bottom, j/k/space/b to scroll)"
+            f"[bold]File: {self.file_path}[/bold]{follow_indicator}"
+            " (ESC/Q close, f follow, g/G top/bottom, j/k/space/b scroll)"
         )
+
+    def display_content(self) -> None:
+        """Display the file content in the RichLog widget."""
+        self._update_header()
 
         # Update content
         log_widget = self.query_one("#file_log", RichLog)
@@ -154,34 +162,97 @@ class FileViewerScreen(ModalScreen[None]):
 
     def action_close(self) -> None:
         """Close the file viewer."""
+        self._stop_follow()
         self.dismiss()
+
+    def _stop_follow(self) -> None:
+        """Stop follow mode if active."""
+        if not self.following:
+            return
+        if self.follow_timer is not None:
+            self.follow_timer.stop()
+            self.follow_timer = None
+        self.following = False
+        self._update_header()
+        self.notify("Stopped following")
+
+    def action_toggle_follow(self) -> None:
+        """Toggle follow mode (tail -f style)."""
+        if self.following:
+            self._stop_follow()
+        else:
+            # Start following
+            self.following = True
+            log_widget = self.query_one("#file_log", RichLog)
+            log_widget.scroll_end()
+            self._do_follow_tick()
+            self.follow_timer = self.set_interval(1.0, self._do_follow_tick)
+            self._update_header()
+            self.notify("Following log…")
+
+    def _do_follow_tick(self) -> None:
+        """Read new lines from the file and append them to the log."""
+        try:
+            file_path = Path(self.file_path)
+            if not file_path.exists() or not file_path.is_file():
+                self.notify("File no longer accessible", severity="error")
+                self.action_toggle_follow()
+                return
+
+            with open(file_path, "r", encoding="utf-8") as f:
+                new_lines = [line.rstrip("\n\r") for line in f.readlines()]
+
+            old_count = len(self.file_lines)
+            if len(new_lines) > old_count:
+                log_widget = self.query_one("#file_log", RichLog)
+                for i in range(old_count, len(new_lines)):
+                    line_num = i + 1
+                    log_widget.write(f"[dim]{line_num:6}:[/dim] {new_lines[i]}")
+                self.file_lines = new_lines
+                log_widget.scroll_end()
+            elif len(new_lines) < old_count:
+                # File was truncated — reload entirely
+                self.file_lines = new_lines
+                self.display_content()
+                log_widget = self.query_one("#file_log", RichLog)
+                log_widget.scroll_end()
+
+        except Exception as e:
+            self.notify(f"Follow error: {e}", severity="error")
+            self.action_toggle_follow()
 
     def action_go_to_top(self) -> None:
         """Go to the beginning of the file."""
+        self._stop_follow()
         log_widget = self.query_one("#file_log", RichLog)
         log_widget.scroll_home()
 
     def action_go_to_bottom(self) -> None:
         """Go to the end of the file."""
+        self._stop_follow()
         log_widget = self.query_one("#file_log", RichLog)
         log_widget.scroll_end()
 
     def action_scroll_down(self) -> None:
         """Scroll down one line."""
+        self._stop_follow()
         log_widget = self.query_one("#file_log", RichLog)
         log_widget.scroll_down()
 
     def action_scroll_up(self) -> None:
         """Scroll up one line."""
+        self._stop_follow()
         log_widget = self.query_one("#file_log", RichLog)
         log_widget.scroll_up()
 
     def action_page_down(self) -> None:
         """Scroll down one page."""
+        self._stop_follow()
         log_widget = self.query_one("#file_log", RichLog)
         log_widget.scroll_page_down()
 
     def action_page_up(self) -> None:
         """Scroll up one page."""
+        self._stop_follow()
         log_widget = self.query_one("#file_log", RichLog)
         log_widget.scroll_page_up()

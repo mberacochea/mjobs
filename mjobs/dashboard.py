@@ -84,6 +84,108 @@ class SearchScreen(ModalScreen[str]):
         self.action_submit()
 
 
+class ConfirmKillScreen(ModalScreen[bool]):
+    """Modal confirmation dialog for killing a job."""
+
+    BINDINGS = [
+        Binding("y", "confirm", "Yes"),
+        Binding("enter", "confirm", "Confirm"),
+        Binding("n", "cancel", "No"),
+        Binding("escape", "cancel", "Cancel"),
+    ]
+
+    CSS = """
+    ConfirmKillScreen {
+        align: center middle;
+    }
+
+    #confirm_dialog {
+        width: 70;
+        height: 12;
+        border: thick $background 80%;
+        background: $surface;
+        padding: 2;
+    }
+
+    #confirm_dialog Label {
+        margin: 1 1;
+        text-align: center;
+        width: 1fr;
+    }
+    """
+
+    def __init__(self, job_id: str, job_name: str, **kwargs):
+        super().__init__(**kwargs)
+        self.job_id = job_id
+        self.job_name = job_name
+
+    def compose(self) -> ComposeResult:
+        with Container(id="confirm_dialog"):
+            yield Label(f"Kill job {self.job_id} ({self.job_name})?")
+            yield Label("[y/Enter] Confirm  [n/Escape] Cancel")
+
+    def action_confirm(self):
+        self.dismiss(True)
+
+    def action_cancel(self):
+        self.dismiss(False)
+
+
+class AutoRefreshScreen(ModalScreen[str]):
+    """Modal screen to configure auto-refresh interval."""
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+    ]
+
+    CSS = """
+    AutoRefreshScreen {
+        align: center middle;
+    }
+
+    #auto_refresh_dialog {
+        width: 70;
+        height: 15;
+        border: thick $background 80%;
+        background: $surface;
+        padding: 2;
+    }
+
+    #auto_refresh_input {
+        margin: 1 1;
+        min-height: 3;
+        height: 3;
+        width: 1fr;
+    }
+
+    #auto_refresh_dialog Label {
+        margin: 1 1;
+        text-align: center;
+        height: 2;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        with Container(id="auto_refresh_dialog"):
+            yield Label("Auto-Refresh Interval (seconds)")
+            yield Input(value="10", placeholder="Interval in seconds", id="auto_refresh_input")
+
+    def on_mount(self):
+        refresh_input = self.query_one("#auto_refresh_input", Input)
+        refresh_input.focus()
+
+    def on_input_submitted(self, event: Input.Submitted):
+        """Handle Enter key in input field."""
+        refresh_input = self.query_one("#auto_refresh_input", Input)
+        self.dismiss(refresh_input.value)
+
+    def action_cancel(self):
+        self.dismiss("")
+
+
+ACTIVE_STATES = {"PENDING", "RUNNING", "COMPLETING"}
+
+
 class Dashboard(App):
     """Main dashboard application."""
 
@@ -140,6 +242,9 @@ class Dashboard(App):
         Binding("e", "open_stderr", "Open StdErr"),
         Binding("ctrl+o", "copy_stdout_path", "Copy StdOut Path"),
         Binding("ctrl+e", "copy_stderr_path", "Copy StdErr Path"),
+        Binding("x", "kill_job", "Kill Job"),
+        Binding("ctrl+r", "toggle_auto_refresh", "Auto Refresh"),
+        Binding("h", "toggle_show_all", "Show All Jobs"),
     ]
 
     def __init__(self, slurm_instance, **kwargs):
@@ -147,6 +252,9 @@ class Dashboard(App):
         self.slurm = slurm_instance
         self.jobs = []
         self.details_visible = False
+        self.auto_refresh_timer = None
+        self.auto_refresh_interval: int = 0
+        self.show_all_jobs: bool = False
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -157,15 +265,27 @@ class Dashboard(App):
 
     def on_mount(self) -> None:
         """Called when app starts."""
-        self.title = "mjobs dashboard"
+        self._update_title()
         self.refresh_jobs()
+
+    def _update_title(self) -> None:
+        """Update the app title, including auto-refresh status if active."""
+        if self.auto_refresh_interval > 0:
+            self.title = f"mjobs dashboard [Auto-refresh: {self.auto_refresh_interval}s]"
+        else:
+            self.title = "mjobs dashboard"
 
     def refresh_jobs(self):
         """Refresh job data."""
         try:
             # Get jobs from slurm instance (could be real or test implementation)
             extra_args = self._build_extra_args()
-            self.jobs = self.slurm.get_jobs(self.slurm.args.job_id, extra_args)
+            all_jobs = self.slurm.get_jobs(self.slurm.args.job_id, extra_args)
+
+            if self.show_all_jobs:
+                self.jobs = all_jobs
+            else:
+                self.jobs = [j for j in all_jobs if j.job_state in ACTIVE_STATES]
 
             # Update table
             jobs_table = self.query_one("#jobs_table", JobsTable)
@@ -324,8 +444,67 @@ class Dashboard(App):
         except Exception as e:
             self.notify(f"Failed to copy {file_type} path: {e}", severity="error")
 
+    def action_kill_job(self):
+        """Kill the selected job after confirmation."""
+        jobs_table = self.query_one("#jobs_table", JobsTable)
+        selected_job = jobs_table.get_selected_job()
+
+        if not selected_job:
+            self.notify("No job selected", severity="warning")
+            return
+
+        def handle_confirm(confirmed: bool):
+            if not confirmed:
+                return
+            try:
+                self.slurm.cancel_job(selected_job.job_id)
+                self.notify(f"Job {selected_job.job_id} cancelled", timeout=3)
+                self.refresh_jobs()
+            except Exception as e:
+                self.notify(f"Failed to cancel job {selected_job.job_id}: {e}", severity="error")
+
+        self.push_screen(ConfirmKillScreen(selected_job.job_id, selected_job.job_name), handle_confirm)
+
+    def action_toggle_show_all(self):
+        """Toggle between showing active jobs only or all jobs."""
+        self.show_all_jobs = not self.show_all_jobs
+        self.refresh_jobs()
+        if self.show_all_jobs:
+            self.notify("Showing all jobs", timeout=2)
+        else:
+            self.notify("Showing active jobs only", timeout=2)
+
+    def action_toggle_auto_refresh(self):
+        """Toggle auto-refresh on/off."""
+        if self.auto_refresh_timer is not None:
+            self.auto_refresh_timer.stop()
+            self.auto_refresh_timer = None
+            self.auto_refresh_interval = 0
+            self._update_title()
+            self.notify("Auto-refresh off", timeout=2)
+            return
+
+        def handle_auto_refresh(value: str):
+            if not value:
+                return
+            try:
+                interval = int(value)
+                if interval <= 0:
+                    raise ValueError("must be positive")
+            except ValueError:
+                self.notify(f"Invalid interval: {value!r}", severity="error")
+                return
+            self.auto_refresh_interval = interval
+            self.auto_refresh_timer = self.set_interval(interval, self.refresh_jobs)
+            self._update_title()
+            self.notify(f"Auto-refresh every {interval}s", timeout=2)
+
+        self.push_screen(AutoRefreshScreen(), handle_auto_refresh)
+
     def action_quit(self):
         """Quit the application."""
+        if self.auto_refresh_timer is not None:
+            self.auto_refresh_timer.stop()
         self.exit()
 
 

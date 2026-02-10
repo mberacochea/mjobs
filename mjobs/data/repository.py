@@ -48,6 +48,15 @@ class JobRepository(ABC):
         """
         pass
 
+    @abstractmethod
+    def cancel_job(self, job_id: str) -> None:
+        """Cancel a running or pending job.
+
+        :param job_id: The job ID to cancel
+        :raises JobRepositoryError: If job cancellation fails
+        """
+        pass
+
 
 class JobRepositoryError(Exception):
     """Exception raised for job repository operations."""

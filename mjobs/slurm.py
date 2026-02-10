@@ -164,6 +164,17 @@ class Slurm(Base):
 
         return self.job_repository.get_job_details(job_id)
 
+    def cancel_job(self, job_id: str) -> None:
+        """Cancel a job using the repository pattern.
+
+        :param job_id: The job ID to cancel
+        :raises ValueError: If no repository is configured
+        """
+        if not self.job_repository:
+            raise ValueError("No job repository configured. This should not happen in the new architecture.")
+
+        self.job_repository.cancel_job(job_id)
+
     def main(self):
         """Main execution point, should contain all the code to handle the Slurm implementation"""
 

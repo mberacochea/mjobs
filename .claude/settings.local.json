@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv run ruff check:*)",
+      "Bash(task lint:*)",
+      "Bash(~/.local/bin/ruff check .)",
+      "Bash(~/.cargo/bin/ruff check .)",
+      "Bash(python3 -m ruff check:*)",
+      "Bash(source:*)",
+      "Bash(uv sync:*)",
+      "Bash(uv run:*)",
+      "Bash(mamba create:*)",
+      "Bash(mamba activate:*)",
+      "Bash(pip install:*)"
+    ]
+  }
+}

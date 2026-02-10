@@ -1,69 +1,79 @@
 # mjobs - Claude Code Instructions
 
 ## Project Overview
-mjobs is a Python application that provides a nicer interface on top of Slurm and LSF job schedulers. It uses the Rich library for beautiful CLI table output and is being extended with an interactive dashboard using Textual.
+mjobs (v2.0.0) is a Python CLI tool that provides a nicer interface on top of Slurm and LSF job schedulers. It uses Rich for CLI table output and Textual for an interactive TUI dashboard. Apache-2.0 licensed, authored by Martin Beracochea.
 
-## Current Development Focus
-- Interactive Dashboard: Adding a persistent TUI interface with job filtering, selection, and detailed views
-- Slurm-first approach: Initial implementation focuses on Slurm support before extending to LSF
-- Test data generation: Creating fake job data for development without requiring actual Slurm/LSF installation
+## Architecture
 
-## Development Guidelines
+### Entry Flow
+`mjobs/main.py:main()` -> detects scheduler via `core/factory.py:detect_scheduler()` -> creates `JobRepository` via factory -> instantiates `Slurm` or `LSF` -> calls `.main()`.
 
-### Code Style
-- Follow existing patterns in the codebase
-- Use type hints extensively
-- Add docstrings following reStructuredText (reST) style
-- Format with black (line length: 120)
-- Use ruff for linting
-
-### Architecture
-- Maintain backward compatibility with existing CLI functionality
-- Extend the existing `Base` class for new features
-- Keep Slurm and LSF implementations separate
-- Use Rich for CLI output, Textual for TUI components
+### Key Patterns
+- **Repository pattern**: `data/repository.py:JobRepository` (ABC) with `SlurmRepository` (real squeue/scontrol) and `TestJobRepository` (fake data). Slurm uses this; LSF still uses direct subprocess calls.
+- **Inheritance**: `Base` (ABC) -> `Slurm` / `LSF`. Base handles argparse, table rendering (Rich), TSV output.
+- **Dashboard**: `Slurm.main()` launches `dashboard.py:Dashboard` (Textual App) when `--dashboard` flag is set. Dashboard only works with Slurm (not LSF).
+- **Data model**: `models/job.py:SlurmJob` (Pydantic BaseModel) with validators, `from_squeue_line()` parser, `from_dict()` for test data.
 
 ### Key Files
-- `mjobs/base.py`: Base class with common functionality and argument parsing
-- `mjobs/slurm.py`: Slurm-specific implementation
-- `mjobs/lsf.py`: LSF-specific implementation
-- `mjobs/main.py`: Entry point that detects available scheduler
-- `robots/dashboard-implementation-plan.md`: Detailed implementation plan and progress tracking
+- `mjobs/main.py` - Entry point, scheduler detection
+- `mjobs/base.py` - Base class: argparse, Rich table rendering
+- `mjobs/slurm.py` - Slurm CLI implementation (uses repository)
+- `mjobs/lsf.py` - LSF CLI implementation (direct bjobs JSON parsing)
+- `mjobs/dashboard.py` - Textual TUI app (Dashboard, SearchScreen)
+- `mjobs/models/job.py` - SlurmJob Pydantic model, SQUEUE_FIELDS
+- `mjobs/data/repository.py` - JobRepository ABC, JobRepositoryError
+- `mjobs/data/slurm_repo.py` - SlurmRepository (real squeue/scontrol)
+- `mjobs/data/test_repo.py` - TestJobRepository (fake data generator)
+- `mjobs/core/factory.py` - create_job_repository(), detect_scheduler()
+- `mjobs/widgets/` - Textual widgets: JobsTable, JobDetailsPanel, FileViewerScreen, ClickablePath, SearchOverlay
 
-### Testing
-- Use test data generation during development (`--test-data` flag)
-- Test with various terminal sizes for TUI components
-- Validate both CLI and dashboard modes
-- Ensure compatibility with existing functionality
+### Dashboard Keybindings
+q=Quit, Ctrl+F=Search, Enter=Details, Escape=Hide Details, r=Refresh, o=StdOut, e=StdErr, Ctrl+O/E=Copy paths, j/k=Navigate
 
-### Dependencies
-- Rich: For CLI table formatting and colors
-- Textual: For interactive TUI dashboard (to be added)
-- Standard library modules for subprocess calls and data handling
+## Code Style
+- Line length: 120 (ruff + black)
+- Type hints on all functions
+- Docstrings: reStructuredText (reST) style
+- All files have Apache-2.0 license headers
 
-## Implementation Status
-Current focus is on implementing the interactive dashboard feature. Progress is tracked in:
-- `robots/dashboard-implementation-plan.md`: Comprehensive implementation plan with progress tracking
-- Todo list maintained during development sessions
-
-## Build Commands
+## Build & Dev Commands
 ```bash
-task install           # Install dependencies
-task dev               # Install with dev dependencies
-task build             # Build macOS binary
-task build-linux       # Build Linux binary (via Docker)
-task clean             # Clean build artifacts
+task install        # uv sync
+task dev            # uv sync --extra dev
+task run            # uv run mjobs
+task run-dashboard  # uv run mjobs --dashboard --test-data
+task lint           # uv run ruff check .
+task lint-fix       # uv run ruff check --fix .
+task format         # uv run ruff format .
+task format-check   # uv run ruff format --check .
+task test           # uv run pytest
+task build          # pyinstaller macOS binary
+task build-linux    # Docker cross-compile Linux binary
+task check          # lint + format-check
+task clean          # rm build artifacts
 ```
 
 ## Usage
 ```bash
-mjobs                   # Show jobs table
-mjobs -f "pattern"     # Filter jobs by pattern
-mjobs --dashboard      # Launch interactive TUI (planned)
+mjobs                          # Show jobs table (auto-detects scheduler)
+mjobs -f "pattern"             # Filter jobs by regex
+mjobs -u alice -t running      # Filter by user and state (Slurm)
+mjobs -e                       # Extended output (nodes, workdir)
+mjobs --dashboard              # Interactive TUI (Slurm only)
+mjobs --dashboard --test-data  # TUI with fake data (no Slurm needed)
+mjobs --tsv                    # TSV output for piping
 ```
 
-## Notes for Future Sessions
-- Update progress in `robots/dashboard-implementation-plan.md` as work progresses
-- Use TodoWrite tool to track current session progress
-- Test both CLI and dashboard modes before completing features
-- Consider performance implications with large job lists
+## Dependencies
+- `rich>=13.7.0` - CLI tables and formatting
+- `rich-argparse>=1.4.0` - Pretty help text
+- `textual>=0.75.1` - Interactive TUI dashboard
+- `pydantic>=2.0.0` - Data model validation
+- Build tooling: hatchling, pyinstaller, ruff, pytest
+
+## Development Notes
+- Use `--test-data` flag for development without Slurm/LSF installed
+- LSF implementation has not been refactored to use the repository pattern yet
+- LSF does not support `--dashboard` mode
+- `Base.__init__` has a bug: `self.error_console = console` (ignores error_console param)
+- Test with various terminal sizes when working on TUI components
