@@ -183,6 +183,8 @@ class FileViewerScreen(ModalScreen[None]):
         else:
             # Start following
             self.following = True
+            log_widget = self.query_one("#file_log", RichLog)
+            log_widget.scroll_end()
             self._do_follow_tick()
             self.follow_timer = self.set_interval(1.0, self._do_follow_tick)
             self._update_header()
