@@ -162,21 +162,24 @@ class FileViewerScreen(ModalScreen[None]):
 
     def action_close(self) -> None:
         """Close the file viewer."""
+        self._stop_follow()
+        self.dismiss()
+
+    def _stop_follow(self) -> None:
+        """Stop follow mode if active."""
+        if not self.following:
+            return
         if self.follow_timer is not None:
             self.follow_timer.stop()
             self.follow_timer = None
-        self.dismiss()
+        self.following = False
+        self._update_header()
+        self.notify("Stopped following")
 
     def action_toggle_follow(self) -> None:
         """Toggle follow mode (tail -f style)."""
         if self.following:
-            # Stop following
-            if self.follow_timer is not None:
-                self.follow_timer.stop()
-                self.follow_timer = None
-            self.following = False
-            self._update_header()
-            self.notify("Stopped following")
+            self._stop_follow()
         else:
             # Start following
             self.following = True
@@ -218,40 +221,36 @@ class FileViewerScreen(ModalScreen[None]):
 
     def action_go_to_top(self) -> None:
         """Go to the beginning of the file."""
-        if self.following:
-            return
+        self._stop_follow()
         log_widget = self.query_one("#file_log", RichLog)
         log_widget.scroll_home()
 
     def action_go_to_bottom(self) -> None:
         """Go to the end of the file."""
+        self._stop_follow()
         log_widget = self.query_one("#file_log", RichLog)
         log_widget.scroll_end()
 
     def action_scroll_down(self) -> None:
         """Scroll down one line."""
-        if self.following:
-            return
+        self._stop_follow()
         log_widget = self.query_one("#file_log", RichLog)
         log_widget.scroll_down()
 
     def action_scroll_up(self) -> None:
         """Scroll up one line."""
-        if self.following:
-            return
+        self._stop_follow()
         log_widget = self.query_one("#file_log", RichLog)
         log_widget.scroll_up()
 
     def action_page_down(self) -> None:
         """Scroll down one page."""
-        if self.following:
-            return
+        self._stop_follow()
         log_widget = self.query_one("#file_log", RichLog)
         log_widget.scroll_page_down()
 
     def action_page_up(self) -> None:
         """Scroll up one page."""
-        if self.following:
-            return
+        self._stop_follow()
         log_widget = self.query_one("#file_log", RichLog)
         log_widget.scroll_page_up()
