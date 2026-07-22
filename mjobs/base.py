@@ -14,67 +14,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import argparse
 import csv
 import sys
 from abc import ABC
 
 from rich.console import Console
 from rich.table import Table
-from rich_argparse import RichHelpFormatter
-
-from .version import VERSION
 
 
 class Base(ABC):
     def __init__(self, console: Console, error_console: Console) -> None:
-        """console is the default one to print content
-        error_console will be used to print error messages
-        """
         self.console = console
-        self.error_console = console
+        self.error_console = error_console
         super().__init__()
-
-    def get_args(self, implementation_name: str):
-        """Base arguments that every implementation should support"""
-        parser = argparse.ArgumentParser(
-            description=f"Just like {implementation_name} but a bit nicer",
-            formatter_class=RichHelpFormatter,
-        )
-        parser.add_argument(
-            "-f",
-            dest="filter",
-            required=False,
-            help="Filter the jobs using the specified regex on the job name or pending reason.",
-        )
-        parser.add_argument(
-            "-ts",
-            "--tsv",
-            dest="tsv",
-            action="store_true",
-            help="No fancy table, a good ol' tsv",
-        )
-        parser.add_argument(
-            "-nh",
-            dest="no_header",
-            action="store_true",
-            help="Don't print the table header, useful to pipe the tsv output",
-        )
-        parser.add_argument("--version", help="Version", action="version", version=VERSION)
-        parser.add_argument(
-            "-d",
-            "--dashboard",
-            dest="dashboard",
-            action="store_true",
-            help="Launch interactive dashboard mode",
-        )
-        parser.add_argument(
-            "--test-data",
-            dest="test_data",
-            action="store_true",
-            help="Use fake test data (useful for development)",
-        )
-        return parser
 
     def render(
         self,
@@ -82,23 +34,15 @@ class Base(ABC):
         columns: list[dict[str, any]],
         rows: list[dict[str, any]],
     ):
-        """Render the jobs"""
         if self.args.tsv:
-            # print with no styles
             writer = csv.writer(sys.stdout, delimiter="\t")
             if not self.args.no_header:
                 writer.writerow([c.get("header") for c in columns])
             writer.writerows(rows)
         else:
-            # print the fancy table
             table = Table(title=title, show_lines=True, show_header=not self.args.no_header)
             for col in columns:
                 table.add_column(**col)
             for row in rows:
                 table.add_row(*row)
             self.console.print(table)
-
-    def main(self):
-        """Main execution point.
-        Should handle the logic to get jobs, build the table and any other features"""
-        pass

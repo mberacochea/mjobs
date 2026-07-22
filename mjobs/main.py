@@ -18,47 +18,36 @@ import sys
 
 from rich.console import Console
 
-from mjobs.core import create_job_repository
 from mjobs.core.factory import detect_scheduler
-from mjobs.lsf import LSF
-from mjobs.slurm import Slurm
+
+from .version import VERSION
 
 
 def main():
     """Main entry point for the mjobs application."""
-    console = Console()
-    error_console = Console(stderr=True, style="bold red")
 
-    # Check if test-data mode is requested
+    if "--version" in sys.argv:
+        print(f"mjobs {VERSION}")
+        return
+
     test_data_mode = "--test-data" in sys.argv
-
-    # Detect available scheduler
     scheduler = detect_scheduler()
 
-    try:
-        if scheduler == "lsf":
-            # Use LSF (unchanged for now)
-            lsf = LSF(console, error_console)
-            lsf.main()
-        elif scheduler == "slurm" or test_data_mode:
-            # Create repository through factory
-            job_repository = create_job_repository(
-                test_mode=test_data_mode,
-                console=console if not test_data_mode else None,
-                error_console=error_console if not test_data_mode else None,
-            )
-
-            # Create Slurm instance with repository
-            slurm = Slurm(console, error_console, job_repository=job_repository)
-            slurm.main()
-        else:
-            error_console.log("I can't find bjobs or squeue... so, I can't do anything.")
-            error_console.log("Use --test-data flag to run with fake data for testing.")
-            sys.exit(1)
-
-    except Exception as e:
-        error_console.log(f"Failed to initialize: {e}")
+    if scheduler == "none" and not test_data_mode:
+        error_console = Console(stderr=True, style="bold red")
+        error_console.log("I can't find bjobs or squeue... so, I can't do anything.")
+        error_console.log("Use --test-data flag to run with fake data for testing.")
         sys.exit(1)
+        return
+
+    if scheduler == "lsf" and not test_data_mode:
+        from mjobs.cli import lsf as lsf_cli
+
+        lsf_cli()
+    else:
+        from mjobs.cli import slurm as slurm_cli
+
+        slurm_cli()
 
 
 if __name__ == "__main__":

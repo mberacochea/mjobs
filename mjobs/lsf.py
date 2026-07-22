@@ -19,6 +19,7 @@ import json
 import re
 import sys
 from subprocess import check_output
+from types import SimpleNamespace
 from typing import Optional
 
 from rich.console import Console
@@ -40,138 +41,12 @@ class LSF(Base):
             return Text(job_entry["STAT"], style="honeydew2")
         return Text(job_entry["STAT"], style="grey93")
 
-    def get_args(self):
-        parser = super().get_args("bjobs")
-        parser.add_argument(
-            dest="job_id",
-            help="Specifies the jobs or job arrays that bjobs displays.",
-            nargs="*",
-        )
-        parser.add_argument(
-            "-q",
-            dest="queue",
-            required=False,
-            help="Displays jobs in the specified queue",
-        )
-        parser.add_argument(
-            "-u",
-            dest="user",
-            required=False,
-            help="Displays jobs in the specified user",
-        )
-        parser.add_argument("-r", dest="run", action="store_true", help="Displays running jobs.")
-        parser.add_argument(
-            "-a",
-            dest="all",
-            action="store_true",
-            help="Displays information about jobs in all states, including jobs that finished recently.",
-        )
-        parser.add_argument(
-            "-d",
-            dest="recent",
-            action="store_true",
-            help="Displays information about jobs that finished recently.",
-        )
-        parser.add_argument(
-            "-G",
-            dest="user_group",
-            required=False,
-            help="Displays jobs associated with the specified user group.",
-        )
-        parser.add_argument(
-            "-g",
-            dest="group",
-            required=False,
-            help="Displays information about jobs attached to the specified job group.",
-        )
-        parser.add_argument(
-            "-m",
-            dest="hosts",
-            required=False,
-            help="Displays jobs dispatched to the specified hosts.",
-        )
-        parser.add_argument(
-            "-p",
-            dest="pend",
-            action="store_true",
-            help=(
-                "Displays pending jobs, together with the pending reasons that caused each job "
-                "not to be dispatched during the last dispatch turn."
-            ),
-        )
-        parser.add_argument(
-            "-e",
-            dest="extended",
-            action="store_true",
-            help="Add the execution hosts, output file and error file to the table.",
-        )
-        parser.add_argument(
-            "--bkill",
-            dest="bkill",
-            action="store_true",
-            help="Terminate found or filtered jobs with bkill.",
-        )
-        self.args = parser.parse_args()
-        return parser
-
-    def parse_bjobs(self, bjobs_output_str):
-        """Parse records from bjobs json type output.
-        This snippet comes from: https://github.com/DataBiosphere/toil/blob/master/src/toil/batchSystems/lsf.py
-        :param bjobs_output_str: stdout of bjobs json type output
-        :return: list with the jobs
-        """
-        bjobs_dict = None
-        bjobs_records = None
-        # Handle Cannot connect to LSF. Please wait ... type messages
-        dict_start = bjobs_output_str.find("{")
-        dict_end = bjobs_output_str.rfind("}")
-        if dict_start != -1 and dict_end != -1:
-            bjobs_output = bjobs_output_str[dict_start : (dict_end + 1)]
-            bjobs_dict = json.loads(bjobs_output)
-            return bjobs_dict["RECORDS"]
-        if bjobs_records is None:
-            raise ValueError(f"Could not find bjobs output json in: {bjobs_output_str}")
-        return []
-
-    def get_jobs(self, job_ids: Optional[list[int]] = None, lsf_args: Optional[list[str]] = None):
-        """bjobs command, it uses the json output and includes [stat, name and jobid].
-        Any other parameters in lsf_args will be included in the call to bjobs.
-        """
-        fields = [
-            "stat",
-            "name",
-            "jobid",
-            "job_group",
-            "user",
-            "queue",
-            "submit_time",
-            "start_time",
-            "finish_time",
-            "exec_host",
-            "command",
-            "exit_reason",
-            "exit_code",
-            "error_file",
-            "output_file",
-            "pend_reason",
-        ]
-        args = ["bjobs", "-json", "-o", " ".join(fields)]
-        if lsf_args:
-            args.extend(list(map(str, lsf_args)))
-        if job_ids:
-            args.extend(list(map(str, job_ids)))
-        bjobs_output = check_output(args, universal_newlines=True)
-        jobs = self.parse_bjobs(bjobs_output)
-        return jobs
-
-    def bkill(self, job: int) -> None:
-        args = ["bkill", str(job)]
-        return check_output(args, universal_newlines=True)
-
-    def main(self):
-        """Main execution point, should contain all the code to handle the LSF implementation"""
-
-        self.get_args()
+    def run(self, **kwargs):
+        args_dict = dict(kwargs)
+        args_dict["job_id"] = args_dict.pop("job_ids", ())
+        args_dict["all"] = args_dict.pop("show_all", False)
+        args_dict["run"] = args_dict.pop("show_run", False)
+        self.args = SimpleNamespace(**args_dict)
 
         jobs = []
         lsf_args = []
@@ -218,6 +93,10 @@ class LSF(Base):
                     jobs,
                 )
             )
+
+        if self.args.kill:
+            self.error_console.print(Text("--kill is not implemented for LSF. Use --bkill instead."), style="bold red")
+            return
 
         if not jobs:
             self.console.print(Text("No jobs.", style="bold white", justify="left"))
@@ -297,3 +176,48 @@ class LSF(Base):
                     self.console.print(lsf_bkill_output.replace("\n", ""))
                 except Exception:
                     self.error_console.print(Text(f"bkill for {job_id} failed"), style="bold red")
+
+    def parse_bjobs(self, bjobs_output_str):
+        bjobs_dict = None
+        bjobs_records = None
+        dict_start = bjobs_output_str.find("{")
+        dict_end = bjobs_output_str.rfind("}")
+        if dict_start != -1 and dict_end != -1:
+            bjobs_output = bjobs_output_str[dict_start : (dict_end + 1)]
+            bjobs_dict = json.loads(bjobs_output)
+            return bjobs_dict["RECORDS"]
+        if bjobs_records is None:
+            raise ValueError(f"Could not find bjobs output json in: {bjobs_output_str}")
+        return []
+
+    def get_jobs(self, job_ids: Optional[list[int]] = None, lsf_args: Optional[list[str]] = None):
+        fields = [
+            "stat",
+            "name",
+            "jobid",
+            "job_group",
+            "user",
+            "queue",
+            "submit_time",
+            "start_time",
+            "finish_time",
+            "exec_host",
+            "command",
+            "exit_reason",
+            "exit_code",
+            "error_file",
+            "output_file",
+            "pend_reason",
+        ]
+        args = ["bjobs", "-json", "-o", " ".join(fields)]
+        if lsf_args:
+            args.extend(list(map(str, lsf_args)))
+        if job_ids:
+            args.extend(list(map(str, job_ids)))
+        bjobs_output = check_output(args, universal_newlines=True)
+        jobs = self.parse_bjobs(bjobs_output)
+        return jobs
+
+    def bkill(self, job: int) -> None:
+        args = ["bkill", str(job)]
+        return check_output(args, universal_newlines=True)

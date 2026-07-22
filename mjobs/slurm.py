@@ -18,7 +18,8 @@ import getpass
 import re
 import sys
 from datetime import datetime
-from subprocess import CalledProcessError
+from subprocess import CalledProcessError, check_output
+from types import SimpleNamespace
 from typing import Any, Dict, Optional
 
 from rich.console import Console
@@ -42,134 +43,11 @@ class Slurm(Base):
         }
         return Text(job_state, style=colours.get(job_state, "grey93"))
 
-    def get_args(self):
-        JOB_STATES = [
-            "pending",
-            "running",
-            "suspended",
-            "completed",
-            "cancelled",
-            "failed",
-            "timeout",
-            "node_fail",
-            "preempted",
-            "boot_fail",
-            "deadline",
-            "out_of_memory",
-            "completing",
-            "configuring",
-            "resizing",
-            "resv_del_hold",
-            "requeued",
-            "requeue_fed",
-            "requeue_hold",
-            "revoked",
-            "signaling",
-            "special_exit",
-            "stage_out",
-            "stopped",
-        ]
-        parser = super().get_args("squeue")
-        parser.add_argument(
-            dest="job_id",
-            help="Specifies the jobs or job arrays that squeue displays.",
-            nargs="*",
-        )
-        parser.add_argument(
-            "-p",
-            "--partition",
-            dest="partition",
-            required=False,
-            help="""Specify the partitions of the jobs or steps to view.
-            Accepts a comma separated list of partition names.""",
-        )
-        parser.add_argument(
-            "-u",
-            "--user",
-            dest="user",
-            required=False,
-            help="""Request jobs or job steps from a comma separated list of users.
-            The list can consist of user names or user id numbers.
-            Performance of the command can be measurably improved for systems with
-            large numbers of jobs when a single user is specified.
-            """,
-        )
-        parser.add_argument(
-            "-t",
-            "--states",
-            dest="states",
-            choices=JOB_STATES,
-            nargs="+",
-            help="""
-            Specify the states of jobs to view. Accepts a comma separated list of state names or 'all'.
-            If 'all' is specified then jobs of all states will be reported.
-            If no state is specified then pending, running, and completing jobs are reported.
-            See the JOB STATE CODES section below for a list of valid states.
-            Both extended and compact forms are valid.
-            Note the <state_list> supplied is case insensitive ('pending' and 'PENDING' are equivalent).
-            """,
-        )
-        parser.add_argument(
-            "-w",
-            "--nodelist",
-            dest="nodelist",
-            nargs="+",
-            help="""
-            Report only on jobs allocated to the specified node or list of nodes.
-            This may either be the NodeName or NodeHostname as defined in slurm.conf(5)
-            in the event that they differ.
-            A node_name of localhost is mapped to the current host name.
-            """,
-        )
-        parser.add_argument(
-            "-e",
-            dest="extended",
-            action="store_true",
-            help="Add the execution nodes, stdoutput file and stderror file to the table.",
-        )
-        self.args = parser.parse_args()
-        return parser
+    def run(self, **kwargs):
+        args_dict = dict(kwargs)
+        args_dict["job_id"] = args_dict.pop("job_ids", ())
+        self.args = SimpleNamespace(**args_dict)
 
-    def get_jobs(self, job_ids: Optional[list[int]] = None, args: Optional[list[str]] = None):
-        """Get jobs using the repository pattern.
-
-        :param job_ids: Specific job IDs to fetch (optional)
-        :param args: Additional arguments for job filtering (optional)
-        :return: List of SlurmJob instances
-        :raises ValueError: If no repository is configured
-        """
-        if not self.job_repository:
-            raise ValueError("No job repository configured. This should not happen in the new architecture.")
-
-        return self.job_repository.get_jobs(job_ids, args)
-
-    def parse_timestamp_str(self, timestamp: Optional[int]) -> str:
-        if timestamp is None:
-            return f"Invalid timestamp. {timestamp}"
-        try:
-            dt_object = datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S")
-            return str(dt_object)
-        except (TypeError, ValueError):
-            return f"Invalid timestamp. {timestamp}"
-
-    def get_job_details(self, job_id: str) -> Dict[str, Any]:
-        """Get detailed job information using the repository pattern.
-
-        :param job_id: The job ID to get details for
-        :return: Dictionary containing parsed job details
-        :raises ValueError: If no repository is configured
-        """
-        if not self.job_repository:
-            raise ValueError("No job repository configured. This should not happen in the new architecture.")
-
-        return self.job_repository.get_job_details(job_id)
-
-    def main(self):
-        """Main execution point, should contain all the code to handle the Slurm implementation"""
-
-        self.get_args()
-
-        # Check if dashboard mode is requested
         if self.args.dashboard:
             from mjobs.dashboard import launch_dashboard
 
@@ -199,7 +77,6 @@ class Slurm(Base):
                 status.stop()
 
         except CalledProcessError:
-            # This is handled by get_jobs
             if not self.args.tsv:
                 status.stop()
             sys.exit(1)
@@ -216,6 +93,30 @@ class Slurm(Base):
                     jobs,
                 )
             )
+
+        if self.args.kill:
+            if not jobs:
+                self.console.print(Text("No jobs to kill."))
+                return
+            if not self.args.filter and not self.args.job_id:
+                self.console.print(Text("Are you sure? This will kill all listed jobs.", style="bold yellow"))
+                answer = self.console.input(f"Type [bold yellow]'yes'[/] to confirm ([bold cyan]{len(jobs)}[/] jobs): ")
+                if answer.strip().lower() != "yes":
+                    self.console.print(Text("Aborted."))
+                    return
+            self.console.print(Text(f"Cancelling {len(jobs)} job(s)..."), style="bold white")
+            killed = 0
+            failed = 0
+            for job in jobs:
+                try:
+                    self.kill_job(job.job_id)
+                    self.console.print(f"  {job.job_id} {job.job_name}: cancelled")
+                    killed += 1
+                except CalledProcessError:
+                    self.error_console.print(Text(f"  {job.job_id} {job.job_name}: failed"), style="bold red")
+                    failed += 1
+            self.console.print(Text(f"Done. Killed: {killed}, Failed: {failed}"))
+            return
 
         if not jobs:
             self.console.print(Text("No jobs.", style="bold white", justify="left"))
@@ -270,3 +171,28 @@ class Slurm(Base):
             rows.append(row)
 
         self.render(title=title, columns=cols, rows=rows)
+
+    def get_jobs(self, job_ids: Optional[list[int]] = None, args: Optional[list[str]] = None):
+        if not self.job_repository:
+            raise ValueError("No job repository configured. This should not happen in the new architecture.")
+
+        return self.job_repository.get_jobs(job_ids, args)
+
+    def parse_timestamp_str(self, timestamp: Optional[str]) -> str:
+        if timestamp is None:
+            return f"Invalid timestamp. {timestamp}"
+        try:
+            dt_object = datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S")
+            return str(dt_object)
+        except (TypeError, ValueError):
+            return f"Invalid timestamp. {timestamp}"
+
+    def get_job_details(self, job_id: str) -> Dict[str, Any]:
+        if not self.job_repository:
+            raise ValueError("No job repository configured. This should not happen in the new architecture.")
+
+        return self.job_repository.get_job_details(job_id)
+
+    def kill_job(self, job_id: str) -> str:
+        args = ["scancel", str(job_id)]
+        return check_output(args, universal_newlines=True)

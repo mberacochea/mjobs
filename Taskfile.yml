@@ -42,10 +42,9 @@ tasks:
       - uv run ruff format --check .
 
   test:
-    desc: Run tests
+    desc: Run unit tests
     cmds:
-      - uv run pytest
-    ignore_error: true
+      - uv run pytest tests/ -v
 
   build:
     desc: Build standalone binary with pyinstaller
