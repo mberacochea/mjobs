@@ -45,39 +45,21 @@ error_console = Console(stderr=True, style="bold red")
 @click.option("-f", "--filter", default=None, help="Filter jobs by regex on the job name or pending reason.")
 @click.option("-ts", "--tsv", is_flag=True, help="No fancy table, a good ol' tsv")
 @click.option("-nh", "--no-header", is_flag=True, help="Don't print the table header, useful to pipe the tsv output")
-@click.option(
-    "-d",
-    "--dashboard",
-    is_flag=True,
-    help="Launch interactive dashboard mode",
-)
+@click.option("-d", "--dashboard", is_flag=True, help="Launch interactive dashboard mode")
 @click.option("--test-data", is_flag=True, help="Use fake test data (useful for development)")
 @click.option("--kill", is_flag=True, help="Cancel/kill the listed jobs")
 @click.argument("job_ids", nargs=-1)
-@click.option(
-    "-p",
-    "--partition",
-    default=None,
-    help="Specify the partitions of the jobs or steps to view. Accepts a comma separated list of partition names.",
-)
-@click.option(
-    "-u",
-    "--user",
-    default=None,
-    help="Request jobs or job steps from a comma separated list of users.",
-)
+@click.option("-p", "--partition", default=None, help="Specify the partitions of the jobs or steps to view.")
+@click.option("-u", "--user", default=None, help="Request jobs or job steps from a comma separated list of users.")
 @click.option(
     "-t",
     "--states",
     multiple=True,
     type=click.Choice(SLURM_JOB_STATES),
-    help="Specify the states of jobs to view. Accepts a comma separated list of state names.",
+    help="Specify the states of jobs to view.",
 )
 @click.option(
-    "-w",
-    "--nodelist",
-    multiple=True,
-    help="Report only on jobs allocated to the specified node or list of nodes.",
+    "-w", "--nodelist", multiple=True, help="Report only on jobs allocated to the specified node or list of nodes."
 )
 @click.option("-e", "--extended", is_flag=True, help="Add the execution nodes, stdoutput file and stderror file.")
 def slurm(
@@ -99,8 +81,7 @@ def slurm(
         console=console if not test_data else None,
         error_console=error_console if not test_data else None,
     )
-    slurm = Slurm(console, error_console, job_repository=job_repository)
-    slurm.run(
+    Slurm(console, error_console, job_repository=job_repository).run(
         filter=filter,
         tsv=tsv,
         no_header=no_header,
@@ -121,12 +102,7 @@ def slurm(
 @click.option("-f", "--filter", default=None, help="Filter jobs by regex on the job name or pending reason.")
 @click.option("-ts", "--tsv", is_flag=True, help="No fancy table, a good ol' tsv")
 @click.option("-nh", "--no-header", is_flag=True, help="Don't print the table header, useful to pipe the tsv output")
-@click.option(
-    "-d",
-    "--dashboard",
-    is_flag=True,
-    help="Launch interactive dashboard mode",
-)
+@click.option("-d", "--dashboard", is_flag=True, help="Launch interactive dashboard mode")
 @click.option("--kill", is_flag=True, help="Cancel/kill the listed jobs")
 @click.argument("job_ids", nargs=-1)
 @click.option("-q", "--queue", default=None, help="Displays jobs in the specified queue")
@@ -135,9 +111,7 @@ def slurm(
 @click.option("-a", "--all", "show_all", is_flag=True, help="Displays information about jobs in all states.")
 @click.option("--recent", is_flag=True, help="Displays information about jobs that finished recently.")
 @click.option("-G", "--user-group", default=None, help="Displays jobs associated with the specified user group.")
-@click.option(
-    "-g", "--group", default=None, help="Displays information about jobs attached to the specified job group."
-)
+@click.option("-g", "--group", default=None, help="Displays information about jobs attached to the specified job group.")
 @click.option("-m", "--hosts", default=None, help="Displays jobs dispatched to the specified hosts.")
 @click.option("--pend", is_flag=True, help="Displays pending jobs with pending reasons.")
 @click.option("-e", "--extended", is_flag=True, help="Add the execution hosts, output file and error file.")

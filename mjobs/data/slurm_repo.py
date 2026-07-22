@@ -22,7 +22,7 @@ from rich.console import Console
 
 from mjobs.models import SQUEUE_FIELDS, SlurmJob
 
-from .repository import JobRepository, JobRepositoryError
+from mjobs.data.repository import JobRepository, JobRepositoryError
 
 
 class SlurmRepository(JobRepository):

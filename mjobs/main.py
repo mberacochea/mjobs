@@ -20,7 +20,7 @@ from rich.console import Console
 
 from mjobs.core.factory import detect_scheduler
 
-from .version import VERSION
+from mjobs.version import VERSION
 
 
 def main():

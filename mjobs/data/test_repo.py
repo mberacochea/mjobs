@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional
 
 from mjobs.models import SlurmJob
 
-from .repository import JobRepository
+from mjobs.data.repository import JobRepository
 
 
 class TestJobRepository(JobRepository):

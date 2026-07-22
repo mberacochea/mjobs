@@ -4,8 +4,7 @@ from unittest.mock import patch
 from click.testing import CliRunner
 from rich.console import Console
 
-from mjobs.cli import lsf as lsf_cli
-from mjobs.cli import slurm as slurm_cli
+from mjobs.cli import lsf as lsf_cli, slurm as slurm_cli
 from mjobs.data.test_repo import TestJobRepository
 from mjobs.slurm import Slurm
 
