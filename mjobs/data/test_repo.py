@@ -86,7 +86,12 @@ class TestJobRepository(JobRepository):
             "N/A",  # For non-running jobs
         ]
 
-    def get_jobs(self, job_ids: Optional[List[int]] = None, extra_args: Optional[List[str]] = None) -> List[SlurmJob]:
+    def get_jobs(
+        self,
+        job_ids: Optional[List[int]] = None,
+        extra_args: Optional[List[str]] = None,
+        full_fields: bool = False,
+    ) -> List[SlurmJob]:
         """Generate fake jobs that match the requested criteria.
 
         :param job_ids: Specific job IDs to generate (optional)

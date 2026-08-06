@@ -91,7 +91,7 @@ class SlurmJob(BaseModel):
         return v.strip() if v and v.strip() not in ["", "-----", "None"] else "N/A"
 
     @classmethod
-    def from_squeue_line(cls, line: str, field_count: int) -> "SlurmJob":
+    def from_squeue_line(cls, line: str, field_count: int, delimiter: str = "|") -> "SlurmJob":
         """Create SlurmJob from squeue output line with robust parsing.
 
         :param line: Raw line from squeue output
@@ -104,7 +104,7 @@ class SlurmJob(BaseModel):
 
         try:
             # Parse the pipe-separated values, handling quoted strings
-            values = [element.strip() for element in line.strip('"').split("|")]
+            values = [element.strip() for element in line.strip('"').split(delimiter)]
 
             # Handle missing nodes field for non-running jobs
             if len(values) == field_count - 1:

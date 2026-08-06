@@ -24,6 +24,8 @@ from mjobs.models import SQUEUE_FIELDS, SlurmJob
 
 from mjobs.data.repository import JobRepository, JobRepositoryError
 
+SQUEUE_DELIMITER = "\x1f"
+
 
 class SlurmRepository(JobRepository):
     """Repository for accessing real Slurm job data via squeue/scontrol commands.
@@ -41,22 +43,29 @@ class SlurmRepository(JobRepository):
         self.console = console
         self.error_console = error_console
 
-    def get_jobs(self, job_ids: Optional[List[int]] = None, extra_args: Optional[List[str]] = None) -> List[SlurmJob]:
+    def get_jobs(
+        self,
+        job_ids: Optional[List[int]] = None,
+        extra_args: Optional[List[str]] = None,
+        full_fields: bool = False,
+    ) -> List[SlurmJob]:
         """Retrieve jobs from Slurm using squeue command.
 
         :param job_ids: Specific job IDs to fetch (optional)
         :param extra_args: Additional squeue arguments (optional)
+        :param full_fields: Request fields without scheduler-side truncation (optional)
         :return: List of SlurmJob instances
         :raises JobRepositoryError: If squeue command fails or parsing fails
         """
         try:
-            squeue_cmd = self._build_squeue_command(job_ids, extra_args)
+            squeue_cmd = self._build_squeue_command(job_ids, extra_args, full_fields=full_fields)
 
             # Execute squeue command
             squeue_output = check_output(squeue_cmd, universal_newlines=True)
 
             # Parse output into jobs
-            return self._parse_squeue_output(squeue_output)
+            delimiter = SQUEUE_DELIMITER if full_fields else "|"
+            return self._parse_squeue_output(squeue_output, delimiter=delimiter)
 
         except CalledProcessError as e:
             raise JobRepositoryError(f"squeue command failed with exit code {e.returncode}: {e}", original_error=e)
@@ -85,15 +94,27 @@ class SlurmRepository(JobRepository):
         except Exception as e:
             raise JobRepositoryError(f"Failed to get job details for {job_id}: {e}", original_error=e)
 
-    def _build_squeue_command(self, job_ids: Optional[List[int]], extra_args: Optional[List[str]]) -> List[str]:
+    def _build_squeue_command(
+        self,
+        job_ids: Optional[List[int]],
+        extra_args: Optional[List[str]],
+        full_fields: bool = False,
+    ) -> List[str]:
         """Build the squeue command with proper formatting and arguments.
 
         :param job_ids: Job IDs to include
         :param extra_args: Additional arguments
+        :param full_fields: Use the non-truncating squeue format option
         :return: Complete squeue command as list
         """
-        # Build format string from field definitions
-        format_string = "|".join(field[0] for field in SQUEUE_FIELDS)
+        # ``--Format`` expects long field names, while these definitions use
+        # squeue's printf-style format language. Keep using ``--format`` and
+        # remove precision limits when full fields are requested.
+        format_specs = [field[0] for field in SQUEUE_FIELDS]
+        if full_fields:
+            format_specs = [re.sub(r"%\.(?:\d+)?", "%", spec) for spec in format_specs]
+        delimiter = SQUEUE_DELIMITER if full_fields else "|"
+        format_string = delimiter.join(format_specs)
 
         squeue = [
             "squeue",
@@ -112,7 +133,7 @@ class SlurmRepository(JobRepository):
 
         return squeue
 
-    def _parse_squeue_output(self, output: str) -> List[SlurmJob]:
+    def _parse_squeue_output(self, output: str, delimiter: str = "|") -> List[SlurmJob]:
         """Parse squeue output into SlurmJob instances with robust error handling.
 
         :param output: Raw squeue output
@@ -129,7 +150,7 @@ class SlurmRepository(JobRepository):
                 continue
 
             try:
-                job = SlurmJob.from_squeue_line(line, expected_field_count)
+                job = SlurmJob.from_squeue_line(line, expected_field_count, delimiter=delimiter)
                 jobs.append(job)
 
             except ValueError as e:

@@ -62,6 +62,7 @@ error_console = Console(stderr=True, style="bold red")
     "-w", "--nodelist", multiple=True, help="Report only on jobs allocated to the specified node or list of nodes."
 )
 @click.option("-e", "--extended", is_flag=True, help="Add the execution nodes, stdoutput file and stderror file.")
+@click.option("--details", "json_output", is_flag=True, help="Print one job's details as JSON.")
 def slurm(
     filter,
     tsv,
@@ -75,6 +76,7 @@ def slurm(
     states,
     nodelist,
     extended,
+    json_output,
 ):
     job_repository = create_job_repository(
         test_mode=test_data,
@@ -93,7 +95,8 @@ def slurm(
         user=user,
         states=states,
         nodelist=nodelist,
-        extended=extended,
+        extended=extended or json_output,
+        json_output=json_output,
     )
 
 
@@ -111,10 +114,13 @@ def slurm(
 @click.option("-a", "--all", "show_all", is_flag=True, help="Displays information about jobs in all states.")
 @click.option("--recent", is_flag=True, help="Displays information about jobs that finished recently.")
 @click.option("-G", "--user-group", default=None, help="Displays jobs associated with the specified user group.")
-@click.option("-g", "--group", default=None, help="Displays information about jobs attached to the specified job group.")
+@click.option(
+    "-g", "--group", default=None, help="Displays information about jobs attached to the specified job group."
+)
 @click.option("-m", "--hosts", default=None, help="Displays jobs dispatched to the specified hosts.")
 @click.option("--pend", is_flag=True, help="Displays pending jobs with pending reasons.")
 @click.option("-e", "--extended", is_flag=True, help="Add the execution hosts, output file and error file.")
+@click.option("--details", "json_output", is_flag=True, help="Print one job's details as JSON.")
 @click.option("--bkill", is_flag=True, help="Terminate found or filtered jobs with bkill.")
 def lsf(
     filter,
@@ -133,6 +139,7 @@ def lsf(
     hosts,
     pend,
     extended,
+    json_output,
     bkill,
 ):
     LSF(console, error_console).run(
@@ -151,6 +158,7 @@ def lsf(
         group=group,
         hosts=hosts,
         pend=pend,
-        extended=extended,
+        extended=extended or json_output,
+        json_output=json_output,
         bkill=bkill,
     )

@@ -28,11 +28,17 @@ class JobRepository(ABC):
     """
 
     @abstractmethod
-    def get_jobs(self, job_ids: Optional[List[int]] = None, extra_args: Optional[List[str]] = None) -> List[SlurmJob]:
+    def get_jobs(
+        self,
+        job_ids: Optional[List[int]] = None,
+        extra_args: Optional[List[str]] = None,
+        full_fields: bool = False,
+    ) -> List[SlurmJob]:
         """Retrieve jobs based on criteria.
 
         :param job_ids: Specific job IDs to fetch (optional)
         :param extra_args: Additional arguments for job filtering (optional)
+        :param full_fields: Request fields without scheduler-side truncation (optional)
         :return: List of SlurmJob instances
         :raises JobRepositoryError: If job retrieval fails
         """

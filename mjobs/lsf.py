@@ -47,6 +47,8 @@ class LSF(Base):
         args_dict["all"] = args_dict.pop("show_all", False)
         args_dict["run"] = args_dict.pop("show_run", False)
         self.args = SimpleNamespace(**args_dict)
+        json_output = getattr(self.args, "json_output", False)
+        self.args.extended = self.args.extended or json_output
 
         jobs = []
         lsf_args = []
@@ -72,16 +74,16 @@ class LSF(Base):
 
         try:
             status = self.console.status("Getting jobs from LSF...")
-            if not self.args.tsv:
+            if not self.args.tsv and not json_output:
                 status.start()
 
             jobs = self.get_jobs(self.args.job_id, lsf_args)
 
-            if not self.args.tsv:
+            if not self.args.tsv and not json_output:
                 status.stop()
 
         except Exception:
-            if not self.args.tsv:
+            if not self.args.tsv and not json_output:
                 status.stop()
             self.console.print_exception()
 
@@ -99,8 +101,18 @@ class LSF(Base):
             return
 
         if not jobs:
+            if json_output:
+                self.error_console.print("JSON output requires exactly one matching job.")
+                return
             self.console.print(Text("No jobs.", style="bold white", justify="left"))
             sys.exit(0)
+
+        if json_output:
+            if len(jobs) != 1:
+                self.error_console.print("JSON output requires exactly one matching job.")
+                return
+            self.console.print_json(json.dumps(jobs[0], ensure_ascii=False))
+            return
 
         title = f"LSF jobs for {self.args.user or getpass.getuser()}"
         if self.args.queue:

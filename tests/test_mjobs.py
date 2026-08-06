@@ -1,11 +1,15 @@
 import io
+import json
+import re
 from unittest.mock import patch
 
 from click.testing import CliRunner
 from rich.console import Console
 
 from mjobs.cli import lsf as lsf_cli, slurm as slurm_cli
+from mjobs.data.slurm_repo import SQUEUE_DELIMITER, SlurmRepository
 from mjobs.data.test_repo import TestJobRepository
+from mjobs.models import SQUEUE_FIELDS
 from mjobs.slurm import Slurm
 
 
@@ -50,6 +54,43 @@ def test_slurm_get_jobs():
     slurm = make_slurm()
     jobs = slurm.get_jobs()
     assert len(jobs) == 50
+
+
+def test_slurm_full_fields_command_uses_printf_format():
+    repository = SlurmRepository(make_console(), make_console())
+
+    command = repository._build_squeue_command([15722940], [], full_fields=True)
+
+    assert command[2] == "--format"
+    expected_format = SQUEUE_DELIMITER.join(re.sub(r"%\.(?:\d+)?", "%", field[0]) for field in SQUEUE_FIELDS)
+    assert command[3] == f'"{expected_format}"'
+    assert "%." not in command[3]
+
+
+def test_slurm_full_fields_preserve_delimiters_in_values():
+    repository = SlurmRepository(make_console(), make_console())
+    values = [
+        "123",
+        "job|name",
+        "1:00",
+        "1G",
+        "partition",
+        "RUNNING",
+        "user",
+        "command|with|pipes",
+        "None",
+        "2024-01-01T00:00:00",
+        "2024-01-01T00:00:00",
+        "N/A",
+        "/work|dir",
+        "node",
+    ]
+
+    jobs = repository._parse_squeue_output(SQUEUE_DELIMITER.join(values), delimiter=SQUEUE_DELIMITER)
+
+    assert jobs[0].job_name == "job|name"
+    assert jobs[0].command == "command|with|pipes"
+    assert jobs[0].workdir == "/work|dir"
 
 
 def test_slurm_run_with_test_data():
@@ -118,6 +159,7 @@ def test_slurm_cli_help():
     result = runner.invoke(slurm_cli, ["--help"])
     assert result.exit_code == 0
     assert "partition" in result.output
+    assert "--details" in result.output
 
 
 def test_lsf_cli_help():
@@ -125,12 +167,24 @@ def test_lsf_cli_help():
     result = runner.invoke(lsf_cli, ["--help"])
     assert result.exit_code == 0
     assert "queue" in result.output
+    assert "--details" in result.output
 
 
 def test_slurm_cli_with_test_data():
     runner = CliRunner()
     result = runner.invoke(slurm_cli, ["--test-data"])
     assert result.exit_code == 0
+
+
+def test_slurm_cli_json_with_test_data():
+    runner = CliRunner()
+    result = runner.invoke(slurm_cli, ["--test-data", "--details", "123456"])
+
+    assert result.exit_code == 0
+    job = json.loads(result.output)
+    assert job["job_id"] == "123456"
+    assert "workdir" in job
+    assert "nodes" in job
 
 
 def test_lsf_bkill_flag_accepted():

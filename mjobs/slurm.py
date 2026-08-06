@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import getpass
+import json
 import re
 import sys
 from datetime import datetime
@@ -47,6 +48,8 @@ class Slurm(Base):
         args_dict = dict(kwargs)
         args_dict["job_id"] = args_dict.pop("job_ids", ())
         self.args = SimpleNamespace(**args_dict)
+        json_output = getattr(self.args, "json_output", False)
+        self.args.extended = self.args.extended or json_output
 
         if self.args.dashboard:
             from mjobs.dashboard import launch_dashboard
@@ -68,20 +71,23 @@ class Slurm(Base):
 
         try:
             status = self.console.status("Getting jobs from Slurm...")
-            if not self.args.tsv:
+            if not self.args.tsv and not json_output:
                 status.start()
 
-            jobs = self.get_jobs(self.args.job_id, extra_args)
+            if json_output:
+                jobs = self.get_jobs(self.args.job_id, extra_args, full_fields=True)
+            else:
+                jobs = self.get_jobs(self.args.job_id, extra_args)
 
-            if not self.args.tsv:
+            if not self.args.tsv and not json_output:
                 status.stop()
 
         except CalledProcessError:
-            if not self.args.tsv:
+            if not self.args.tsv and not json_output:
                 status.stop()
             sys.exit(1)
         except Exception:
-            if not self.args.tsv:
+            if not self.args.tsv and not json_output:
                 status.stop()
             self.console.print_exception()
 
@@ -119,8 +125,18 @@ class Slurm(Base):
             return
 
         if not jobs:
+            if json_output:
+                self.error_console.print("JSON output requires exactly one matching job.")
+                return
             self.console.print(Text("No jobs.", style="bold white", justify="left"))
             sys.exit(0)
+
+        if json_output:
+            if len(jobs) != 1:
+                self.error_console.print("JSON output requires exactly one matching job.")
+                return
+            self.console.print_json(json.dumps(jobs[0].to_dict(), ensure_ascii=False))
+            return
 
         title = f"Slurm jobs for {self.args.user or getpass.getuser()}"
         if self.args.partition:
@@ -172,10 +188,17 @@ class Slurm(Base):
 
         self.render(title=title, columns=cols, rows=rows)
 
-    def get_jobs(self, job_ids: Optional[list[int]] = None, args: Optional[list[str]] = None):
+    def get_jobs(
+        self,
+        job_ids: Optional[list[int]] = None,
+        args: Optional[list[str]] = None,
+        full_fields: bool = False,
+    ):
         if not self.job_repository:
             raise ValueError("No job repository configured. This should not happen in the new architecture.")
 
+        if full_fields:
+            return self.job_repository.get_jobs(job_ids, args, full_fields=True)
         return self.job_repository.get_jobs(job_ids, args)
 
     def parse_timestamp_str(self, timestamp: Optional[str]) -> str:
